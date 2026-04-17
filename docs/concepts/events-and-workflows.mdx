@@ -9,48 +9,49 @@ Droidrun provides **real-time event streaming** that gives you visibility into a
 
 Under the hood, Droidrun uses [llama-index workflows](https://docs.llamaindex.ai/en/stable/understanding/workflows/) - an event-driven orchestration system that powers the agent architecture.
 
-## Basic Usage
+
+## 基本用法
 
 ```python
 from droidrun.agent.droid import DroidAgent
 
-# Create and run agent
+# 创建并运行 Agent
 agent = DroidAgent(goal="Open Gmail and check inbox", config=config)
 handler = agent.run()
 
-# Stream events in real-time
+# 实时流式接收事件
 async for event in handler.stream_events():
     if isinstance(event, ManagerPlanDetailsEvent):
-        print(f"📋 Plan: {event.plan}")
-        print(f"🎯 Current subgoal: {event.subgoal}")
+        print(f"📋 计划: {event.plan}")
+        print(f"🎯 当前子目标: {event.subgoal}")
 
     elif isinstance(event, ExecutorActionEvent):
-        print(f"⚡ Action: {event.description}")
-        print(f"💭 Thought: {event.thought}")
+        print(f"⚡ 动作: {event.description}")
+        print(f"💭 思考: {event.thought}")
 
     elif isinstance(event, ScreenshotEvent):
         save_screenshot(event.screenshot, "screenshot.png")
 
     elif isinstance(event, FastAgentResponseEvent):
         if event.code:
-            print(f"🔧 Tool calls: {event.code}")
+            print(f"🔧 工具调用: {event.code}")
         if event.thought:
-            print(f"💭 Thought: {event.thought}")
+            print(f"💭 思考: {event.thought}")
 
-# Wait for final result
+# 等待最终结果
 result = await handler
-print(f"✅ Success: {result.success}")
-print(f"📝 Reason: {result.reason}")
+print(f"✅ 成功: {result.success}")
+print(f"📝 原因: {result.reason}")
 ```
 
-## Event Types
+## 事件类型
 
 <AccordionGroup>
-  <Accordion title="Workflow Coordination Events">
-Used for workflow coordination between DroidAgent and its child agents.
+  <Accordion title="工作流协调事件">
+用于 DroidAgent 与其子 Agent 之间的工作流协调。
 
 ```python
-# Main workflow
+# 主工作流事件
 class FastAgentExecuteEvent(Event):
     instruction: str
 
@@ -69,7 +70,7 @@ class ResultEvent(StopEvent):
     steps: int
     structured_output: BaseModel | None
 
-# Manager/Executor coordination
+# Manager/Executor 协调事件
 class ManagerInputEvent(Event): pass
 class ManagerPlanEvent(Event):
     plan: str
@@ -87,7 +88,7 @@ class ExecutorResultEvent(Event):
     error: str
     summary: str
 
-# External user message events
+# 外部用户消息事件
 class ExternalUserMessageAppliedEvent(Event):
     message_ids: List[str]
     consumer: str
@@ -100,8 +101,8 @@ class ExternalUserMessageDroppedEvent(Event):
 ```
   </Accordion>
 
-  <Accordion title="Manager Events (Internal)">
-Internal to ManagerAgent, streamed to frontend/logging.
+  <Accordion title="Manager 事件（内部）">
+ManagerAgent 内部事件，通常用于前端/日志流式传输。
 
 ```python
 class ManagerContextEvent(Event): pass
@@ -122,8 +123,8 @@ class ManagerPlanDetailsEvent(Event):
 ```
   </Accordion>
 
-  <Accordion title="Executor Events (Internal)">
-Internal to ExecutorAgent, streamed to frontend/logging.
+  <Accordion title="Executor 事件（内部）">
+ExecutorAgent 内部事件，通常用于前端/日志流式传输。
 
 ```python
 class ExecutorContextEvent(Event):
@@ -149,8 +150,8 @@ class ExecutorActionResultEvent(Event):
 ```
   </Accordion>
 
-  <Accordion title="FastAgent Events (Internal)">
-Internal to FastAgent, used in direct execution mode.
+  <Accordion title="FastAgent 事件（内部）">
+FastAgent 内部事件，适用于直连执行模式。
 
 ```python
 class FastAgentInputEvent(Event):
@@ -174,9 +175,9 @@ class FastAgentEndEvent(Event):
 ```
   </Accordion>
 
-  <Accordion title="Common, Visual & Telemetry Events">
+  <Accordion title="通用、可视化与遥测事件">
 ```python
-# Common events (droidrun/agent/common/events.py)
+# 通用事件（droidrun/agent/common/events.py）
 class ScreenshotEvent(Event):
     screenshot: bytes
 
@@ -189,7 +190,7 @@ class ToolExecutionEvent(Event):
     success: bool
     summary: str
 
-# Telemetry events (when enabled)
+# 遥测事件（启用时）
 class DroidAgentInitEvent(TelemetryEvent):
     goal: str
     llms: Dict[str, str]
@@ -216,7 +217,7 @@ class DroidAgentFinalizeEvent(TelemetryEvent):
     unique_packages_count: int
     unique_activities_count: int
 
-# Usage tracking
+# 使用量跟踪
 class UsageResult(BaseModel):
     request_tokens: int
     response_tokens: int
@@ -226,9 +227,9 @@ class UsageResult(BaseModel):
   </Accordion>
 </AccordionGroup>
 
-## Common Patterns
+## 常见模式
 
-### Building a Live UI
+### 构建实时 UI
 
 ```python
 async def run_with_ui(goal: str):
@@ -250,7 +251,7 @@ async def run_with_ui(goal: str):
     ui.show_completion(result.success, result.reason)
 ```
 
-### Tracking Token Usage
+### 跟踪 Token 使用量
 
 ```python
 async def track_token_usage(goal: str):
@@ -261,21 +262,21 @@ async def track_token_usage(goal: str):
     total_requests = 0
 
     async for event in handler.stream_events():
-        # Check for events that contain usage information
+        # 检查包含使用量信息的事件
         if hasattr(event, 'usage') and event.usage:
             total_tokens += event.usage.total_tokens
             total_requests += event.usage.requests
 
-            print(f"LLM call - Input: {event.usage.request_tokens}, "
-                  f"Output: {event.usage.response_tokens}, "
-                  f"Total: {event.usage.total_tokens}")
+            print(f"LLM 调用 - 输入: {event.usage.request_tokens}, "
+                  f"输出: {event.usage.response_tokens}, "
+                  f"总计: {event.usage.total_tokens}")
 
     result = await handler
-    print(f"\n📊 Total tokens used: {total_tokens}")
-    print(f"📊 Total LLM requests: {total_requests}")
+    print(f"\n📊 总共使用的 Token: {total_tokens}")
+    print(f"📊 总 LLM 请求数: {total_requests}")
 ```
 
-### Logging and Monitoring
+### 日志与监控
 
 ```python
 import logging
@@ -292,64 +293,64 @@ async def monitor_execution(goal: str):
     async for event in handler.stream_events():
         if isinstance(event, ExecutorActionEvent):
             action_count += 1
-            logger.info(f"Action {action_count}: {event.description}")
+            logger.info(f"动作 {action_count}: {event.description}")
 
         elif isinstance(event, FastAgentOutputEvent):
-            logger.info(f"Tool execution result: {event.output}")
+            logger.info(f"工具执行结果: {event.output}")
 
     result = await handler
     duration = time.time() - start_time
 
-    logger.info(f"Task completed in {duration:.2f}s with {action_count} actions")
-    logger.info(f"Result: {result.success} - {result.reason}")
+    logger.info(f"任务在 {duration:.2f}s 内完成，共 {action_count} 次动作")
+    logger.info(f"结果: {result.success} - {result.reason}")
 ```
 
-## Notes
+## 说明
 
-### Event Streaming Behavior
+### 事件流行为
 
-- Events are **streamed in real-time** as the agent executes
-- Not all events are emitted in every execution (depends on mode and actions)
-- All events are **Pydantic models** with full type safety
-- The `handler` object is **async** - always use `await handler` to get the final result
+- 事件会在 Agent 执行时**实时流式**发送
+- 并非每次执行都会发出所有事件（取决于模式与动作）
+- 所有事件均为 **Pydantic 模型**，具有完整类型保障
+- `handler` 对象是 **异步** 的 —— 请始终使用 `await handler` 获取最终结果
 
-### Event Emission by Mode
+### 不同模式下的事件发出
 
-**Reasoning Mode** (`reasoning=True`) emits:
-- Coordination: `ManagerInputEvent`, `ManagerPlanEvent`, `ExecutorInputEvent`, `ExecutorResultEvent`
-- Internal Manager: `ManagerContextEvent`, `ManagerResponseEvent`, `ManagerPlanDetailsEvent`
-- Internal Executor: `ExecutorContextEvent`, `ExecutorResponseEvent`, `ExecutorActionEvent`, `ExecutorActionResultEvent`
-- Tool execution: `ToolExecutionEvent` (after every tool dispatch)
-- Visual: `ScreenshotEvent`, `RecordUIStateEvent` (when enabled)
+**推理模式**（`reasoning=True`）会发出：
+- 协调事件：`ManagerInputEvent`, `ManagerPlanEvent`, `ExecutorInputEvent`, `ExecutorResultEvent`
+- Manager 内部：`ManagerContextEvent`, `ManagerResponseEvent`, `ManagerPlanDetailsEvent`
+- Executor 内部：`ExecutorContextEvent`, `ExecutorResponseEvent`, `ExecutorActionEvent`, `ExecutorActionResultEvent`
+- 工具执行：`ToolExecutionEvent`（每次工具调度后）
+- 可视化：`ScreenshotEvent`, `RecordUIStateEvent`（启用时）
 
-**Direct Mode** (`reasoning=False`) emits:
-- Coordination: `FastAgentExecuteEvent`, `FastAgentResultEvent`
-- Internal FastAgent: `FastAgentInputEvent`, `FastAgentResponseEvent`, `FastAgentToolCallEvent`, `FastAgentOutputEvent`, `FastAgentEndEvent`
-- Tool execution: `ToolExecutionEvent` (after every tool dispatch)
-- Visual: `ScreenshotEvent`, `RecordUIStateEvent` (when enabled)
+**直连模式**（`reasoning=False`）会发出：
+- 协调事件：`FastAgentExecuteEvent`, `FastAgentResultEvent`
+- FastAgent 内部：`FastAgentInputEvent`, `FastAgentResponseEvent`, `FastAgentToolCallEvent`, `FastAgentOutputEvent`, `FastAgentEndEvent`
+- 工具执行：`ToolExecutionEvent`（每次工具调度后）
+- 可视化：`ScreenshotEvent`, `RecordUIStateEvent`（启用时）
 
-**All Modes** emit:
-- Finalization: `FinalizeEvent`, `ResultEvent`
-- Telemetry: `DroidAgentInitEvent`, `PackageVisitEvent`, `DroidAgentFinalizeEvent` (when telemetry enabled)
+**所有模式**均会发出：
+- 终结事件：`FinalizeEvent`, `ResultEvent`
+- 遥测：`DroidAgentInitEvent`, `PackageVisitEvent`, `DroidAgentFinalizeEvent`（启用遥测时）
 
-### Event Categories
+### 事件类别
 
-**Coordination Events** - Used for workflow routing between agents (minimal data)
-- Located in `droidrun/agent/droid/events.py`
-- Examples: `ManagerPlanEvent`, `ExecutorResultEvent`, `ExternalUserMessageAppliedEvent`
+**协调事件** - 用于 Agent 间的工作流路由（仅包含最小数据）
+- 位于 `droidrun/agent/droid/events.py`
+- 示例：`ManagerPlanEvent`, `ExecutorResultEvent`, `ExternalUserMessageAppliedEvent`
 
-**Internal Events** - Used for streaming to frontend/logging (full debug data)
-- Located in agent-specific event files
-- Examples: `ManagerPlanDetailsEvent`, `ExecutorActionEvent`, `FastAgentResponseEvent`
+**内部事件** - 用于前端/日志流式传输（包含完整调试数据）
+- 位于各 Agent 的事件文件中
+- 示例：`ManagerPlanDetailsEvent`, `ExecutorActionEvent`, `FastAgentResponseEvent`
 
-**Common Events** - Emitted during execution (for screenshots, UI state recording, and tool tracking)
-- Located in `droidrun/agent/common/events.py`
-- Examples: `ScreenshotEvent`, `RecordUIStateEvent`, `ToolExecutionEvent`
+**通用事件** - 执行期间发出（用于截图、UI 状态记录和工具跟踪）
+- 位于 `droidrun/agent/common/events.py`
+- 示例：`ScreenshotEvent`, `RecordUIStateEvent`, `ToolExecutionEvent`
 
-**Telemetry Events** - Captured for analytics (when enabled)
-- Located in `droidrun/telemetry/events.py`
-- Examples: `DroidAgentInitEvent`, `PackageVisitEvent`, `DroidAgentFinalizeEvent`
+**遥测事件** - 用于分析收集（启用时）
+- 位于 `droidrun/telemetry/events.py`
+- 示例：`DroidAgentInitEvent`, `PackageVisitEvent`, `DroidAgentFinalizeEvent`
 
-## Learn More
+## 了解更多
 
-- [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/understanding/workflows/) - The underlying orchestration system
+- [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/understanding/workflows/) - 底层编排系统

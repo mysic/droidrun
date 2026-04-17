@@ -46,3 +46,4 @@
 37. [37 Features文档教程（AppCards、Credentials、CustomTools、Variables、StructuredOutput、Telemetry、Tracing）](./37-Features文档教程-AppCards-Credentials-CustomTools-Variables-StructuredOutput-Telemetry-Tracing.md)
 38. [38 Guides文档教程（Overview、CLI、DeviceSetup、Docker）](./38-Guides文档教程-Overview-CLI-DeviceSetup-Docker.md)
 39. [39 SDK文档教程（DroidAgent、Drivers、Configuration、Reference）](./39-SDK文档教程-DroidAgent-Drivers-Configuration-Reference.md)
+40. [40 Provider配置联动链教程（Providers、CLI向导、TUI设置数据串联）](./40-Provider配置联动链教程-Providers-CLI向导-TUI设置数据串联.md)

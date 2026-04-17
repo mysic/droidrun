@@ -199,3 +199,196 @@ agent = DroidAgent(
 - [Custom Prompts](/concepts/prompts) - How to customize agent prompts
 - [Custom Tools](/features/custom-tools) - Creating custom tool functions
 - [DroidAgent SDK](/sdk/droid-agent) - Complete API reference
+
+自定义变量可在以下位置访问：
+- **Agent 提示**（通过自定义 Jinja2 模板）
+- **自定义工具**（通过 `ctx.shared_state.custom_variables`）
+
+---
+
+## 快速开始
+
+```python
+from droidrun import DroidAgent, DroidConfig
+
+# 定义会在模板中渲染的自定义 prompts
+custom_prompts = {
+    "manager_system": """
+{{ instruction }}
+
+{% if variables %}
+Available variables:
+{% for key, value in variables.items() %}
+- {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+    """
+}
+
+# 创建带变量的 Agent
+config = DroidConfig()
+
+agent = DroidAgent(
+    goal="Send email to recipient with subject",
+    config=config,
+    variables={"recipient": "john@example.com", "subject": "Update"},
+    prompts=custom_prompts  # 需要自定义 prompts 才能在提示中看到变量
+)
+
+result = await agent.run()
+```
+
+**重要提示：** 默认模板不会渲染 `variables`，你必须通过 `prompts` 参数提供自定义模板。
+
+---
+
+## 变量的工作方式
+
+当你向 `DroidAgent` 传入 `variables` 时：
+
+1. 存储在 `DroidAgentState.custom_variables` 中
+2. 作为 `variables` 字典传递给提示模板
+3. 在 Jinja2 模板中通过 `{% if variables %}` 块渲染
+4. 在整个工作流中对所有子 Agent 可用
+
+**访问摘要：**
+- ✅ Agent 提示（通过自定义 Jinja2 模板）
+- ✅ Agent 可以读取并将其作为工具参数传递
+- ✅ 自定义工具（通过 `ctx.shared_state.custom_variables`）
+
+---
+
+## 基本用法
+
+```python
+from droidrun import DroidAgent, DroidConfig
+
+# 定义变量
+variables = {
+    "recipient": "alice@example.com",
+    "message": "Hello from Droidrun!"
+}
+
+# 自定义提示以渲染变量
+custom_prompts = {
+    "fast_agent_system": """
+You are an agent that controls Android devices.
+
+{% if variables %}
+Available variables:
+{% for key, value in variables.items() %}
+- {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+
+Use these variables when executing tasks.
+    """
+}
+
+# 创建 Agent
+config = DroidConfig()
+
+agent = DroidAgent(
+    goal="Send message to recipient",
+    config=config,
+    variables=variables,
+    prompts=custom_prompts
+)
+
+result = await agent.run()
+```
+
+### 可用提示键
+
+可定制以渲染变量的提示键：
+
+- `manager_system` - Manager Agent 的系统提示
+- `executor_system` - Executor Agent 的系统提示
+- `fast_agent_system` - FastAgent 的系统提示
+- `fast_agent_user` - FastAgent 的用户提示
+
+---
+
+## 在自定义工具中访问变量
+
+自定义工具可通过 `ctx` 参数访问变量（`ActionContext` 实例自动注入）：
+
+```python
+from droidrun import DroidAgent, DroidConfig
+
+async def send_notification(title: str, *, ctx, **kwargs):
+    """使用自定义变量中的通道发送通知。"""
+
+    # 通过 ctx.shared_state 访问自定义变量
+    channel = ctx.shared_state.custom_variables.get("notification_channel", "default")
+    return f"Sent '{title}' to {channel}"
+
+custom_tools = {
+    "send_notification": {
+        "parameters": {
+            "title": {"type": "string", "required": True},
+        },
+        "description": "Send a notification with title. Usage: {\"action\": \"send_notification\", \"title\": \"Alert\"}",
+        "function": send_notification
+    }
+}
+
+config = DroidConfig()
+
+agent = DroidAgent(
+    goal="Send notification with title 'Alert'",
+    config=config,
+    custom_tools=custom_tools,
+    variables={"notification_channel": "alerts"}
+)
+```
+
+---
+
+## 使用场景
+
+### 参数化工作流
+
+```python
+# 使用不同变量运行可重用工作流
+for user in ["alice@example.com", "bob@example.com"]:
+    agent = DroidAgent(
+        goal="Send welcome email",
+        config=config,
+        variables={"recipient": user},
+        prompts=custom_prompts
+    )
+    await agent.run()
+```
+
+### 配置数据
+
+```python
+variables = {
+    "api_endpoint": "https://api.example.com/v2",
+    "timeout": 30
+}
+
+agent = DroidAgent(
+    goal="Call API endpoint",
+    config=config,
+    variables=variables,
+    prompts=custom_prompts
+)
+```
+
+---
+
+## 要点
+
+1. **需要自定义 prompts** - 默认提示不会在 Agent 上下文中渲染变量
+2. **工具中可直接访问** - 自定义工具通过 `ActionContext` 的 `ctx.shared_state.custom_variables` 访问变量
+3. **对所有 Agent 可用** - Manager、Executor、FastAgent 都能接收变量
+4. **Jinja2 模板** - 在自定义提示中使用 `{% if variables %}` 块
+5. **自动注入** - `ctx`（ActionContext）由工具注册表自动注入
+
+## 相关文档
+
+- [Custom Prompts](/concepts/prompts) - 如何自定义 Agent 提示
+- [Custom Tools](/features/custom-tools) - 创建自定义工具函数
+- [DroidAgent SDK](/sdk/droid-agent) - 完整 API 参考

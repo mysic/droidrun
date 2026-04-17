@@ -3,59 +3,60 @@ title: 'Architecture'
 description: 'Understanding the Droidrun multi-agent system for device automation.'
 ---
 
-## What is Droidrun?
 
-Droidrun uses a **multi-agent architecture** where specialized agents work together to complete tasks. Instead of one agent doing everything, different agents handle planning, execution, and computation.
+## 什么是 Droidrun？
 
-```
-DroidAgent (orchestrator)
-├── Reasoning Mode: ManagerAgent → ExecutorAgent
-└── Direct Mode: FastAgent
-```
-
-## Execution Modes
-
-### Reasoning Mode (`reasoning=True`)
-Manager creates plans, Executor takes actions. Best for complex multi-step tasks.
+Droidrun 采用**多智能体架构**，由多个专职 Agent 协作完成任务。不是一个 Agent 包办所有事情，而是将规划、执行、计算等分工给不同的 Agent。
 
 ```
-Goal → Manager (plan) → Executor (action) → Manager (check) → Executor (next) → ...
+DroidAgent（总控）
+├── 推理模式：ManagerAgent → ExecutorAgent
+└── 直连模式：FastAgent
 ```
 
-### Direct Mode (`reasoning=False`)
-FastAgent executes immediately via XML tool-calling without planning overhead. Best for simple tasks.
+## 执行模式
+
+### 推理模式（`reasoning=True`）
+Manager 负责规划，Executor 负责执行。适合复杂的多步骤任务。
 
 ```
-Goal → FastAgent (XML tool-calling) → Done
+目标 → Manager（规划）→ Executor（执行）→ Manager（检查）→ Executor（下步）→ ...
 ```
 
-## Core Agents
+### 直连模式（`reasoning=False`）
+FastAgent 直接通过 XML 工具调用执行，无需规划，适合简单任务。
 
-### DroidAgent (Orchestrator)
-Main coordinator that routes between agents based on mode.
+```
+目标 → FastAgent（XML 工具调用）→ 完成
+```
 
-**Location**: `droidrun/agent/droid/droid_agent.py`
+## 核心 Agent
 
-### ManagerAgent (Planner)
-Creates strategic plans and breaks tasks into subgoals. Reasoning mode only.
+### DroidAgent（总控）
+主协调者，根据模式在各 Agent 之间路由。
 
-**Location**: `droidrun/agent/manager/manager_agent.py`
+**位置**：`droidrun/agent/droid/droid_agent.py`
 
-**Workflow**: `prepare_context()` → `get_response()` → `process_response()` → `finalize()`
+### ManagerAgent（规划者）
+负责制定策略、拆解子目标，仅在推理模式下使用。
 
-### ExecutorAgent (Actor)
-Executes atomic actions for each subgoal. Reasoning mode only.
+**位置**：`droidrun/agent/manager/manager_agent.py`
 
-**Location**: `droidrun/agent/executor/executor_agent.py`
+**流程**：`prepare_context()` → `get_response()` → `process_response()` → `finalize()`
 
-**Workflow**: `prepare_context()` → `get_response()` → `process_response()` → `execute()` → `finalize()`
+### ExecutorAgent（执行者）
+执行每个子目标的原子动作，仅在推理模式下使用。
 
-### FastAgent (Direct Executor)
-Uses XML tool-calling for device interaction. Direct mode only.
+**位置**：`droidrun/agent/executor/executor_agent.py`
 
-**Location**: `droidrun/agent/fast_agent/fast_agent.py`
+**流程**：`prepare_context()` → `get_response()` → `process_response()` → `execute()` → `finalize()`
 
-**Available Actions**:
+### FastAgent（直连执行者）
+通过 XML 工具调用与设备交互，仅在直连模式下使用。
+
+**位置**：`droidrun/agent/fast_agent/fast_agent.py`
+
+**可用动作**：
 ```python
 click(index), click_at(x, y), click_area(x1, y1, x2, y2),
 long_press(index), long_press_at(x, y),
@@ -65,9 +66,9 @@ wait(duration), open_app(text),
 remember(information), complete(success, reason)
 ```
 
-## Configuration
+## 配置
 
-Configure different LLMs per agent:
+可为每个 Agent 配置不同的 LLM：
 
 ```yaml
 llm_profiles:
@@ -81,42 +82,42 @@ llm_profiles:
     provider: GoogleGenAI
     model: gemini-3.1-flash-lite-preview
 agent:
-  reasoning: true       # Enable Manager/Executor workflow
-  max_steps: 15         # Maximum execution steps (global)
+  reasoning: true       # 启用 Manager/Executor 工作流
+  max_steps: 15         # 最大执行步数（全局）
   manager:
-    vision: true        # Send screenshots to Manager
+    vision: true        # 向 Manager 发送截图
   executor:
-    vision: true        # Send screenshots to Executor
+    vision: true        # 向 Executor 发送截图
   fast_agent:
     vision: false
     parallel_tools: true
 ```
 
-## When to Use Each Mode
+## 何时使用不同模式
 
-**Use Reasoning Mode for:**
-- Multi-step tasks (booking flights, configuring settings)
-- Tasks requiring planning and adaptation
-- Complex workflows across multiple apps
+**推理模式适用场景：**
+- 多步骤任务（如订票、配置设置）
+- 需要规划和自适应的任务
+- 跨多个应用的复杂流程
 
-**Use Direct Mode for:**
-- Simple actions (screenshots, sending messages)
-- Fast execution without planning overhead
-- Well-defined single-step tasks
+**直连模式适用场景：**
+- 简单动作（截图、发消息）
+- 需要快速执行、无需规划
+- 明确的单步任务
 
-## Shared State
+## 共享状态
 
-All agents share `DroidAgentState` for coordination:
-- Action history and outcomes
-- Error tracking and recovery
-- Memory and context
-- Current plan and progress
+所有 Agent 通过 `DroidAgentState` 共享协调：
+- 动作历史与结果
+- 错误跟踪与恢复
+- 记忆与上下文
+- 当前计划与进度
 
-## Quick Reference
+## 快速参考
 
-| Agent | Role | Best For | Mode | Config Key |
+| Agent | 角色 | 最佳用途 | 模式 | 配置键 |
 |-------|------|----------|------|------------|
-| DroidAgent | Orchestrator | Entry point | Both | `agent.*` |
-| ManagerAgent | Planner | Strategy, recovery | Reasoning | `agent.manager.*` |
-| ExecutorAgent | Actor | Action execution | Reasoning | `agent.executor.*` |
-| FastAgent | Direct | Simple tasks | Direct | `agent.fast_agent.*` |
+| DroidAgent | 总控 | 入口 | 两者 | `agent.*` |
+| ManagerAgent | 规划 | 策略、恢复 | 推理 | `agent.manager.*` |
+| ExecutorAgent | 执行 | 动作执行 | 推理 | `agent.executor.*` |
+| FastAgent | 直连 | 简单任务 | 直连 | `agent.fast_agent.*` |

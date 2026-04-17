@@ -318,3 +318,319 @@ result = await agent.run()
 - Templates are rendered at runtime with current state
 - If no custom prompt provided, default templates are used
 - Supports full Jinja2 syntax (conditionals, loops, filters)
+
+## 概览
+
+Droidrun 在 Agent 提示中使用 **Jinja2 模板**。你可以通过向 `DroidAgent` 传入自定义的模板字符串来定制 Agent 的行为：
+
+```python
+custom_prompts = {
+    "manager_system": "Your Jinja2 template here...",
+    "executor_system": "Another template...",
+    "fast_agent_system": "...",
+    "fast_agent_user": "..."
+}
+
+agent = DroidAgent(
+    goal="Send an email",
+    config=config,
+    prompts=custom_prompts  # 传入模板字符串，而非文件路径
+)
+```
+
+**重要**：`prompts` 参数接受 Jinja2 **模板字符串**，而不是文件路径。
+
+## 工作原理
+
+1. `DroidAgent` 使用你提供的自定义 prompts 创建一个 `PromptResolver`
+2. 每个 Agent 会检查是否为其键（例如 `manager_system`）提供了自定义模板
+3. 如果提供：使用你提供的自定义模板
+4. 否则：从 Droidrun 内置文件加载默认模板
+5. 模板会使用每个 Agent 专属的上下文变量进行渲染
+
+## 可用的提示键
+
+| Key | Agent | 使用场景 |
+|-----|-------|-----------|
+| `manager_system` | Manager | 规划与推理（仅在推理模式下） |
+| `executor_system` | Executor | 动作选择（仅在推理模式下） |
+| `fast_agent_system` | FastAgent | 直连执行（始终使用） |
+| `fast_agent_user` | FastAgent | 任务输入格式化（始终使用） |
+
+## 上下文变量
+
+每个 Agent 在模板中可访问不同的变量：
+
+### Manager
+
+- `instruction` - 用户的目标描述
+- `device_date` - 设备当前日期/时间
+- `app_card` - 应用相关指导（无则为空）
+- `error_history` - 最近失败动作的详细列表
+- `custom_tools_descriptions` - 自定义工具说明
+- `available_secrets` - 可用的凭据 ID 列表
+- `variables` - 传入 `DroidAgent` 的自定义变量
+- `output_schema` - Pydantic 模型的 schema（如提供）
+
+### Executor
+
+- `instruction` - 用户的目标描述
+- `device_state` - 当前 UI 树
+- `plan` - Manager 提供的当前计划
+- `subgoal` - Manager 的当前子目标
+- `progress_status` - 累计进度摘要
+- `atomic_actions` - 可用的原子动作（包含自定义工具）
+- `action_history` - 最近动作及其结果
+- `available_secrets` - 可用的凭据 ID 列表
+- `variables` - 传入 `DroidAgent` 的自定义变量
+
+### FastAgent
+
+**System prompt（系统提示）：**
+- `tool_descriptions` - 可用工具的签名说明
+- `available_secrets` - 凭据 ID 列表
+- `variables` - 自定义变量
+- `output_schema` - 输出模型的 schema（如提供）
+
+**User prompt（用户提示）：**
+- `goal` - 任务描述
+- `variables` - 自定义变量
+
+## 示例：自定义 Manager 提示
+
+```python
+custom_prompts = {
+    "manager_system": """
+You are a mobile automation planning agent.
+
+Task: {{ instruction }}
+Date: {{ device_date }}
+
+{% if app_card %}
+App guidance:
+{{ app_card }}
+{% endif %}
+
+{% if error_history %}
+Recent errors (you may be stuck):
+{% for error in error_history %}
+- Action: {{ error.action }}
+  Error: {{ error.error }}
+{% endfor %}
+{% endif %}
+
+{% if custom_tools_descriptions %}
+Custom tools:
+{{ custom_tools_descriptions }}
+{% endif %}
+
+{% if variables.domain %}
+Domain: {{ variables.domain }}
+{% endif %}
+
+Output format:
+<thought>Your reasoning</thought>
+<plan>
+1. First step
+2. Second step
+3. DONE
+</plan>
+
+Or if complete:
+<request_accomplished>
+Task is done. Answer: ...
+</request_accomplished>
+"""
+}
+
+agent = DroidAgent(
+    goal="Send an email",
+    config=config,
+    prompts=custom_prompts,
+    variables={"domain": "finance"}
+)
+```
+
+## 示例：使用自定义变量
+
+自定义变量允许你向模板注入动态上下文：
+
+```python
+custom_prompts = {
+    "manager_system": """
+Task: {{ instruction }}
+
+{% if variables.budget %}
+Budget limit: ${{ variables.budget }}
+{% endif %}
+
+{% if variables.priority %}
+Priority: {{ variables.priority }}
+{% endif %}
+
+Guidelines:
+{% for rule in variables.rules %}
+- {{ rule }}
+{% endfor %}
+"""
+}
+
+agent = DroidAgent(
+    goal="Buy a phone",
+    config=config,
+    prompts=custom_prompts,
+    variables={
+        "budget": 1000,
+        "priority": "high",
+        "rules": ["Check reviews", "Compare prices", "Use coupons"]
+    }
+)
+```
+
+## Jinja2 语法参考
+
+### 变量
+
+```jinja2
+{{ instruction }}
+{{ variables.my_var }}
+```
+
+### 条件语句
+
+```jinja2
+{% if app_card %}
+<app_card>{{ app_card }}</app_card>
+{% endif %}
+
+{% if error_history %}
+You have {{ error_history | length }} errors
+{% endif %}
+```
+
+### 循环
+
+```jinja2
+{% for error in error_history %}
+- {{ error.action }}: {{ error.error }}
+{% endfor %}
+```
+
+### 过滤器
+
+```jinja2
+{{ instruction | upper }}
+{{ available_secrets | join(', ') }}
+{{ error_history | length }}
+```
+
+## 最佳实践
+
+### 1. 使用清晰结构
+
+```jinja2
+<instruction>
+{{ instruction }}
+</instruction>
+
+<guidelines>
+1. Rule one
+2. Rule two
+</guidelines>
+
+<output_format>
+Expected format
+</output_format>
+```
+
+### 2. 使用条件处理缺失数据
+
+```jinja2
+{% if app_card %}
+<app_card>{{ app_card }}</app_card>
+{% else %}
+<note>No app-specific guidance available</note>
+{% endif %}
+```
+
+### 3. 文档化预期变量
+
+```jinja2
+{# Expected variables:
+   - instruction: str - User's goal
+   - device_date: str - Current date/time
+   - app_card: str - App guidance (may be empty)
+#}
+```
+
+### 4. 使用变量实现动态行为
+
+```jinja2
+{% if variables.strict_mode %}
+<strict>
+Follow instructions exactly. Do not make assumptions.
+</strict>
+{% endif %}
+```
+
+## 完整示例
+
+```python
+from droidrun import DroidAgent
+from droidrun.config_manager import DroidConfig
+
+# 电商自动化的自定义 prompts
+ecommerce_prompts = {
+    "manager_system": """
+You are an e-commerce automation specialist.
+
+Task: {{ instruction }}
+Budget: ${{ variables.budget }}
+
+{% if app_card %}
+App info:
+{{ app_card }}
+{% endif %}
+
+{% if error_history %}
+Errors encountered:
+{% for error in error_history %}
+- {{ error.action }}: {{ error.summary }} - {{ error.error }}
+{% endfor %}
+Consider changing your approach.
+{% endif %}
+
+Rules:
+1. Verify product names exactly
+2. Check prices before purchasing
+3. Store order confirmations in memory
+4. Never exceed budget
+
+Output:
+<thought>Your reasoning</thought>
+<plan>
+1. Step
+2. DONE
+</plan>
+"""
+}
+
+config = DroidConfig()
+agent = DroidAgent(
+    goal="Buy iPhone 15 Pro from Amazon",
+    config=config,
+    prompts=ecommerce_prompts,
+    variables={"budget": 1200}
+)
+
+result = await agent.run()
+```
+
+## 要点
+
+- 向 `DroidAgent(prompts={...})` 传入 Jinja2 模板 **字符串**（而非文件路径）
+- 每个 Agent 在模板中可用的变量不同
+- 使用 `variables` 参数注入自定义上下文
+- 模板在运行时使用当前状态进行渲染
+- 若未提供自定义提示，将使用默认模板
+- 支持完整的 Jinja2 语法（条件、循环、过滤器）

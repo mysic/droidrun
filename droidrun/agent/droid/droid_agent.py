@@ -90,6 +90,8 @@ if TYPE_CHECKING:
     from droidrun.tools.ui.provider import StateProvider
 
 logger = logging.getLogger("droidrun")
+# 业务: `logger` 是本模块使用的日志记录器（用于输出运行信息、警告和错误），便于运维和调试。
+# 语法: 这一行调用 `logging.getLogger` 返回一个 Logger 对象。后续代码使用 `logger.info/debug/warning/error` 方法记录不同级别的日志。
 
 
 # 教程注释：DroidAgent 是整个框架的总协调器，决定用哪种模式执行任务，并把工具、状态、驱动都串起来。
@@ -136,6 +138,8 @@ class DroidAgent(Workflow):
         *args,
         **kwargs,
     ):
+        # 业务: 存储调用者提供的用户标识，便于遥测/事件关联（例如多用户运行时区分）。
+        # 语法: `kwargs.pop` 从可变关键字参数 `kwargs` 中取出 `user_id` 并从字典中移除；如果不存在则返回 `None`。
         self.user_id = kwargs.pop("user_id", None)
         self.runtype = kwargs.pop("runtype", "developer")
         self.shared_state = DroidAgentState(
@@ -144,9 +148,13 @@ class DroidAgent(Workflow):
             user_id=self.user_id,
             runtype=self.runtype,
         )
+        # 业务: `shared_state` 持有 Agent 的运行时共享状态（指令、历史、错误计数等），在整个工作流中传递和更新。
+        # 语法: 这里通过调用 `DroidAgentState(...)` 实例化一个对象，并将其赋值给 `self.shared_state`，以便类的其他方法访问。
         self.output_model = output_model
 
         # Initialize prompt resolver for custom prompts
+        # 业务: 解析并管理用户自定义的 Prompt 模板，允许在运行时替换变量并加载自定义提示词。
+        # 语法: 通过调用 `PromptResolver(...)` 创建对象并赋值给实例属性 `self.prompt_resolver`。
         self.prompt_resolver = PromptResolver(custom_prompts=prompts)
 
         # Store custom variables in shared state
@@ -168,6 +176,8 @@ class DroidAgent(Workflow):
         else:
             self.credential_manager = None
 
+        # 业务: 解析设备配置（如串口、平台等），用于后续连接真实设备或模拟器。
+        # 语法: 这是一个条件表达式（ternary），如果 `config` 为真则取 `config.device`，否则创建默认 `DeviceConfig()`。
         self.resolved_device_config = config.device if config else DeviceConfig()
 
         self.config = DroidConfig(
@@ -191,10 +201,13 @@ class DroidAgent(Workflow):
         self.action_ctx = None
         self.state_provider = None
 
+        # 语法: 调用父类 `Workflow` 的构造函数，传入可变参数和超时配置，初始化工作流框架。
         super().__init__(*args, timeout=timeout, **kwargs)
 
         self._configure_default_logging(debug=self.config.logging.debug)
 
+        # 业务: 根据配置初始化追踪（例如 Phoenix 或 Langfuse），用于收集 LLM 调用和执行路径。
+        # 语法: 调用模块级函数 `setup_tracing`，传入追踪配置对象和当前 Agent（self）。
         setup_tracing(self.config.tracing, agent=self)
 
         # Check if using external agent - skip LLM loading
@@ -269,8 +282,11 @@ class DroidAgent(Workflow):
         else:
             self.trajectory = None
             self.trajectory_writer = None
+        # 业务: 如果启用了轨迹记录（trajectory），创建轨迹对象与异步写入器，用于保存截图和 UI 状态。
+        # 语法: `Trajectory(...)` 是类实例化；`TrajectoryWriter(queue_size=300)` 创建负责异步写文件的帮助对象。
 
         # Sub-agents are created in __init__ but wired up in start_handler
+        # 以下代码负责根据配置创建 Manager/Executor/FastAgent 等子 Agent 实例（但会在 start_handler 中完成工具注入）。
         if self._using_external_agent:
             self.manager_agent = None
             self.executor_agent = None
@@ -308,6 +324,8 @@ class DroidAgent(Workflow):
         else:
             self.manager_agent = None
             self.executor_agent = None
+        # 业务: 到这里完成了 Agent 的基本组装（LLM、shared_state、子 Agent 实例），但未绑定驱动或工具注册表。
+        # 语法: `self.manager_agent` 和 `self.executor_agent` 是对象引用，可在方法间共享。
 
         # Telemetry init event is fired in start_handler after registry is built.
         self._init_prompts = prompts  # stash for telemetry
@@ -317,6 +335,8 @@ class DroidAgent(Workflow):
 
     # 教程注释：run 只是工作流启动入口，真正复杂的资源准备和分支决策在后面的 start_handler 里完成。
     def run(self, *args, **kwargs) -> Awaitable[ResultEvent] | WorkflowHandler:
+        # 业务: 运行工作流前先把追踪/遥测会话上下文应用到当前执行上下文（可见于 tracing/backends）。
+        # 语法: `apply_session_context()` 是函数调用；`super().run(...)` 调用父类实现并返回一个 handler（可用于事件流处理）。
         apply_session_context()
         handler = super().run(*args, **kwargs)  # type: ignore[assignment]
         return handler
@@ -329,6 +349,8 @@ class DroidAgent(Workflow):
     async def start_handler(
         self, ctx: Context, ev: StartEvent
     ) -> FastAgentExecuteEvent | ManagerInputEvent:
+        # 业务: `start_handler` 是工作流的入口，负责建立设备驱动、状态提供器、工具注册表，并选择执行模式（直连或推理）。
+        # 语法: 使用 `@step` 装饰器表示这是工作流的一个步骤，参数为上下文 `ctx` 和事件 `ev`，并会返回事件用于下一步分支。
         logger.info(
             f"🚀 Running DroidAgent to achieve goal: {self.shared_state.instruction}"
         )
@@ -338,6 +360,7 @@ class DroidAgent(Workflow):
             await self.trajectory_writer.start()
 
         # ── 0. External agent — early exit ────────────────────────────
+        # 业务: 如果配置为使用外部 agent（非内置 droidrun），早期加载外部模块并委托执行，随后直接返回 FinalizeEvent。
         if self._using_external_agent:
             agent_name = self.config.agent.name
 
@@ -363,7 +386,8 @@ class DroidAgent(Workflow):
             agent_config = self.config.external_agents.get(agent_name) or {}
             final_config = {**agent_module["config"], **agent_config}
 
-            # Resolve device serial and get raw AdbDevice
+            # 业务: 解析设备序列号并获取原始 ADB 设备对象以传递给外部 agent。
+            # 语法: `await adb.list()` 是异步调用，返回设备列表；`adb.device(serial=...)` 获取特定设备。
             device_serial = self.resolved_device_config.serial
             if device_serial is None:
                 devices = await adb.list()
@@ -385,6 +409,7 @@ class DroidAgent(Workflow):
             return FinalizeEvent(success=result["success"], reason=result["reason"])
 
         # ── 1. Create driver ──────────────────────────────────────────
+        # 业务: 根据配置决定视觉（截图）是否启用 —— 推理模式由 manager 控制，直连模式由 fast_agent 控制。
         if self.config.agent.reasoning:
             vision_enabled = self.config.agent.manager.vision
         else:
@@ -392,6 +417,7 @@ class DroidAgent(Workflow):
 
         is_ios = self.resolved_device_config.platform.lower() == "ios"
 
+        # 语法/业务: 支持注入 `driver`（用于测试），否则根据平台实例化对应驱动（iOS/Android）。
         if self._injected_driver is not None:
             driver = self._injected_driver
         elif is_ios:
@@ -417,22 +443,27 @@ class DroidAgent(Workflow):
                 serial=device_serial,
                 use_tcp=self.resolved_device_config.use_tcp,
             )
+            # 语法: `await driver.connect()` 异步连接设备，必要时会抛出异常。
             await driver.connect()
 
         # Wrap with StealthDriver if stealth mode enabled
+        # 业务: 当启用 stealth 功能时，使用 `StealthDriver` 包装底层驱动以隐藏自动化痕迹。
         stealth_enabled = self.config.tools and self.config.tools.stealth
         if stealth_enabled and not is_ios:
             driver = StealthDriver(driver)
 
         # Wrap with RecordingDriver if trajectory saving enabled
+        # 业务: 如果启用了轨迹持久化，使用 `RecordingDriver` 包装驱动以记录日志和截图供后续保存。
         if self.config.logging.save_trajectory != "none":
             if not isinstance(driver, RecordingDriver):
                 driver = RecordingDriver(driver)
 
+        # 语法: 将本地 `driver` 引用保存到 `self.driver`，并把平台信息记录到共享状态。
         self.driver = driver
         self.shared_state.platform = driver.platform
 
         # ── 2. Create state provider ──────────────────────────────────
+        # 业务: 创建 `state_provider`，用于在每步读取设备的 UI 树（元素层级），并可能进行格式化/过滤以降低噪音。
         if self._injected_state_provider is not None:
             self.state_provider = self._injected_state_provider
         elif is_ios:
@@ -452,6 +483,7 @@ class DroidAgent(Workflow):
             )
 
         # ── 3. Build tool registry ────────────────────────────────────
+        # 业务: 根据驱动能力和平台构建工具注册表（可用的点击、滑动、键入等工具都会在这里被注册）。
         registry, standard_tool_names = await build_tool_registry(
             supported_buttons=driver.supported_buttons,
             credential_manager=self.credential_manager,
@@ -459,10 +491,12 @@ class DroidAgent(Workflow):
         )
 
         # User custom tools
+        # 语法: 如果用户提供了自定义工具字典，注册到现有工具注册表中。
         if self.user_custom_tools:
             registry.register_from_dict(self.user_custom_tools)
 
         # MCP tools
+        # 业务: 如果启用了 MCP（远程工具），创建 MCP 客户端并发现远程工具，然后将其转换并注册到工具表。
         if self.config.mcp and self.config.mcp.enabled:
             self.mcp_manager = MCPClientManager(self.config.mcp)
             await self.mcp_manager.discover_tools()
@@ -471,6 +505,7 @@ class DroidAgent(Workflow):
                 registry.register_from_dict(mcp_tools)
 
         # Capability-based filtering (deps vs driver+provider supported)
+        # 业务: 根据驱动和状态提供者支持的能力过滤不支持的工具，避免运行时调用失败。
         capabilities = driver.supported | self.state_provider.supported
         registry.disable_unsupported(capabilities)
 
@@ -487,6 +522,8 @@ class DroidAgent(Workflow):
         self.standard_tool_names = standard_tool_names
 
         # ── 4. Create ActionContext ────────────────────────────────────
+        # 业务: `ActionContext` 聚合驱动、共享状态、状态提供者等，用作执行动作时的上下文。
+        # 语法: 通过关键字参数实例化 `ActionContext` 并保存到 `self.action_ctx`。
         self.action_ctx = ActionContext(
             driver=driver,
             ui=None,  # populated each step by state_provider
@@ -498,6 +535,7 @@ class DroidAgent(Workflow):
         )
 
         # ── 5. Wire up sub-agents ─────────────────────────────────────
+        # 业务: 将 `manager_agent` 和 `executor_agent` 绑定到运行时上下文（registry、action_ctx、state_provider 等）。
         if self.config.agent.reasoning and self.executor_agent:
             self.manager_agent.action_ctx = self.action_ctx
             self.manager_agent.state_provider = self.state_provider
@@ -508,9 +546,11 @@ class DroidAgent(Workflow):
             self.executor_agent.action_ctx = self.action_ctx
 
         # ── 6. Fetch device date once ─────────────────────────────────
+        # 语法: 异步调用设备驱动获取设备时间并记录到共享状态（可能用于日志/时间戳）。
         self.shared_state.device_date = await driver.get_date()
 
         # ── 7. Telemetry init event ───────────────────────────────────
+        # 业务: 触发一次初始化的遥测事件（DroidAgentInitEvent），上报当前配置和所选 LLM，用于监控/统计。
         capture(
             DroidAgentInitEvent(
                 goal=self.shared_state.instruction,
@@ -553,6 +593,9 @@ class DroidAgent(Workflow):
         if self.config.logging.save_trajectory != "none":
             self.trajectory_writer.write(self.trajectory, stage="init")
 
+        # 业务: 根据 `agent.reasoning` 配置决定运行模式：
+        # - 直连模式（reasoning=False）：直接触发 `FastAgentExecuteEvent` 进入 `execute_task` 步骤
+        # - 推理模式（reasoning=True）：触发 `ManagerInputEvent` 进入 Manager/Executor 工作流
         if not self.config.agent.reasoning:
             logger.debug(
                 f"🔄 Direct execution mode - executing goal: {self.shared_state.instruction}"
@@ -590,9 +633,13 @@ class DroidAgent(Workflow):
     ) -> FastAgentResultEvent:
         """Execute a single task using FastAgent."""
 
+        # 业务: 该步骤在“直连模式”下执行真实任务，把当前指令交给 `FastAgent`，并将过程事件转发到外层流。
+        # 语法: `async def` 定义异步函数；返回类型注解 `-> FastAgentResultEvent` 仅用于类型提示，不改变运行行为。
         logger.debug(f"🔧 Executing task: {ev.instruction}")
 
         try:
+            # 业务: 构造 FastAgent，并注入执行所需资源（LLM、工具、状态、配置）。
+            # 语法: 通过关键字参数实例化类，得到对象 `agent`。
             agent = FastAgent(
                 llm=self.fast_agent_llm,
                 agent_config=self.config.agent,
@@ -608,11 +655,15 @@ class DroidAgent(Workflow):
                 tracing_config=self.config.tracing,
             )
 
+            # 业务: 启动 FastAgent 的内部工作流；`remembered_info` 把历史记忆传给本轮执行。
+            # 语法: `agent.run(...)` 返回一个 handler（可迭代事件、可 await 得到最终结果）。
             handler = agent.run(
                 input=ev.instruction,
                 remembered_info=self.shared_state.fast_memory,
             )
 
+            # 业务: 持续消费并转发子工作流事件，确保外部（CLI/TUI/日志）能看到实时进度。
+            # 语法: `async for` 用于异步迭代器；每次循环拿到一个 `nested_ev`。
             async for nested_ev in handler.stream_events():
                 self.handle_stream_event(nested_ev, ctx)
 
@@ -623,8 +674,10 @@ class DroidAgent(Workflow):
                             stage=f"fast_agent_step_{self.shared_state.step_number}",
                         )
 
+            # 语法: `await handler` 等待异步任务完成，并取得最终结果字典。
             result = await handler
 
+            # 业务: 将子 Agent 的结果统一封装为 `FastAgentResultEvent` 交给下一步处理。
             return FastAgentResultEvent(
                 success=result.get("success", False),
                 reason=result["reason"],
@@ -632,6 +685,8 @@ class DroidAgent(Workflow):
             )
 
         except DeviceDisconnectedError as e:
+            # 业务: 设备断开属于可预期故障，转为失败事件返回，而不是让流程崩溃。
+            # 语法: `except Xxx as e` 捕获指定异常，并把异常对象绑定到变量 `e`。
             logger.error(f"Device disconnected: {e}")
             return FastAgentResultEvent(
                 success=False,
@@ -640,6 +695,7 @@ class DroidAgent(Workflow):
             )
 
         except Exception as e:
+            # 业务: 兜底异常处理，避免单次错误中断整个外层工作流。
             logger.error(f"Error during task execution: {e}")
             if self.config.logging.debug:
                 logger.error(traceback.format_exc())
@@ -652,6 +708,8 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: FastAgentResultEvent
     ) -> FinalizeEvent:
         try:
+            # 业务: 将 FastAgent 的最终结果直接映射成流程终止事件 `FinalizeEvent`。
+            # 语法: 这里 `ctx` 未直接使用，但保留参数是为了匹配工作流 step 的签名规范。
             return FinalizeEvent(success=ev.success, reason=ev.reason)
 
         except Exception as e:
@@ -672,6 +730,8 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: ManagerInputEvent
     ) -> ManagerPlanEvent | FinalizeEvent:
         """Run Manager planning phase."""
+        # 业务: `run_manager` 负责“规划”环节：生成当前子目标、计划和思考。
+        # 语法: 返回联合类型 `A | B` 表示这个函数可能返回两种事件之一。
         if self.shared_state.step_number >= self.config.agent.max_steps:
             # 教程注释：如果 planning 已触顶，尚未消费的外部消息会显式标记为 dropped，而不是悄悄消失。
             logger.warning(f"⚠️ Reached maximum steps ({self.config.agent.max_steps})")
@@ -698,8 +758,10 @@ class DroidAgent(Workflow):
         )
 
         try:
+            # 业务: 运行 Manager 子工作流，拿到规划结果。
             handler = self.manager_agent.run()
 
+            # 语法: 异步流式读取 Manager 内部事件并转发。
             async for nested_ev in handler.stream_events():
                 self.handle_stream_event(nested_ev, ctx)
 
@@ -715,6 +777,7 @@ class DroidAgent(Workflow):
             answer=result.get("answer", ""),
             success=result.get("success"),
         )
+        # 业务: 将 Manager 的结构化输出包成 `ManagerPlanEvent`，推动后续分支决策。
         ctx.write_event_to_stream(event)
         return event
 
@@ -723,6 +786,7 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: ManagerPlanEvent
     ) -> ExecutorInputEvent | FinalizeEvent | ManagerInputEvent:
         """Process Manager output and decide next step."""
+        # 业务: 这是关键路由器：决定“结束流程”还是“进入 Executor 执行动作”或“回到 Manager 重规划”。
         # Check for answer-type termination
         if ev.answer.strip():
             # 教程注释：若 Manager 想结束但队列里还有外部消息，顶层会强制回到 Manager 再规划一次，优先消费新指令。
@@ -738,6 +802,7 @@ class DroidAgent(Workflow):
             return FinalizeEvent(success=success, reason=ev.answer)
 
         logger.debug(f"▶️  Proceeding to Executor with subgoal: {ev.current_subgoal}")
+        # 语法: 通过构造并返回 `ExecutorInputEvent`，把 `current_subgoal` 作为下游输入传递。
         return ExecutorInputEvent(current_subgoal=ev.current_subgoal)
 
     @step
@@ -745,6 +810,7 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: ExecutorInputEvent
     ) -> ExecutorResultEvent:
         """Run Executor action phase."""
+        # 业务: `run_executor` 负责“执行”环节：真正调用工具执行子目标。
         logger.debug("⚡ Running Executor for action...")
 
         handler = self.executor_agent.run(subgoal=ev.current_subgoal)
@@ -755,6 +821,8 @@ class DroidAgent(Workflow):
         result = await handler
 
         # Update coordination state after execution
+        # 业务: 把执行结果写入共享状态历史，供下一轮 Manager 规划和错误恢复使用。
+        # 语法: `list.append(...)` 向列表尾部追加元素，保持时间顺序。
         self.shared_state.action_history.append(result["action"])
         self.shared_state.summary_history.append(result["summary"])
         self.shared_state.action_outcomes.append(result["outcome"])
@@ -774,6 +842,7 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: ExecutorResultEvent
     ) -> ManagerInputEvent:
         """Process Executor result and continue."""
+        # 业务: 根据最近执行结果判断是否触发错误升级，并决定返回 Manager 进入下一轮规划。
         err_thresh = self.shared_state.err_to_manager_thresh
 
         if len(self.shared_state.action_outcomes) >= err_thresh:
@@ -788,10 +857,12 @@ class DroidAgent(Workflow):
                 self.shared_state.error_flag_plan = False
 
         if self.config.logging.save_trajectory != "none":
+            # 业务: 每完成一轮 Executor 都写一次轨迹快照，便于回放。
             self.trajectory_writer.write(
                 self.trajectory, stage=f"step_{self.shared_state.step_number}"
             )
 
+        # 语法: 返回 `ManagerInputEvent()` 让工作流回到 `run_manager`，形成循环（计划->执行->计划...）。
         return ManagerInputEvent()
 
     # ========================================================================
@@ -800,6 +871,7 @@ class DroidAgent(Workflow):
 
     @step
     async def finalize(self, ctx: Context, ev: FinalizeEvent) -> ResultEvent:
+        # 业务: `finalize` 是收尾步骤，负责落库/上报/截图/轨迹写盘以及资源清理。
         self.shared_state.workflow_completed = True
         ctx.write_event_to_stream(ev)
         capture(
@@ -815,6 +887,7 @@ class DroidAgent(Workflow):
         await flush()
 
         # Base result with answer
+        # 语法: 先构建一个基础结果对象，后续可再补充结构化输出字段。
         result = ResultEvent(
             success=ev.success,
             reason=ev.reason,
@@ -844,6 +917,7 @@ class DroidAgent(Workflow):
                 extraction_result = await handler
 
                 if extraction_result["success"]:
+                    # 业务: 抽取成功时，把结构化对象挂到最终返回结果上。
                     result.structured_output = extraction_result["structured_output"]
                     logger.debug("✅ Structured output added to final result")
                 else:
@@ -868,6 +942,7 @@ class DroidAgent(Workflow):
             or self.config.logging.save_trajectory != "none"
         ):
             try:
+                # 业务: 收尾阶段补采一张最终截图并发到事件流/追踪系统，帮助定位最终界面状态。
                 screenshot = await self.action_ctx.driver.screenshot()
                 if screenshot:
                     ctx.write_event_to_stream(ScreenshotEvent(screenshot=screenshot))
@@ -883,6 +958,7 @@ class DroidAgent(Workflow):
                 logger.warning(f"Failed to capture final screenshot: {e}")
 
             try:
+                # 业务: 同时采集最终 UI 树，便于离线分析“最后停在哪个页面”。
                 ui_state = await self.state_provider.get_state()
                 ctx.write_event_to_stream(
                     RecordUIStateEvent(ui_state=ui_state.elements)
@@ -906,6 +982,7 @@ class DroidAgent(Workflow):
         # Cleanup MCP connections
         if self.mcp_manager:
             try:
+                # 业务: 关闭 MCP 连接，避免连接泄漏和后台资源占用。
                 await self.mcp_manager.disconnect_all()
             except Exception as e:
                 logger.warning(f"MCP cleanup error: {e}")
@@ -917,6 +994,8 @@ class DroidAgent(Workflow):
     # ========================================================================
 
     def handle_stream_event(self, ev: Event, ctx: Context):
+        # 业务: 统一事件转发口，把子流程事件上抛到外层，同时把关键事件写进轨迹缓存。
+        # 语法: `isinstance(ev, StopEvent)` 用于类型判断；`if not ...` 表示过滤掉 StopEvent。
         if not isinstance(ev, StopEvent):
             ctx.write_event_to_stream(ev)
 

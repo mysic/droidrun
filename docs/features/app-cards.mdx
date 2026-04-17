@@ -3,106 +3,106 @@ title: 'App Instruction Cards'
 description: 'App cards give your agents app-specific knowledge to operate apps more effectively. They automatically load when agents work with specific apps, improving success rates for navigation and complex tasks.'
 ---
 
-## What Are App Cards?
+## 什么是 App 卡片？
 
-App cards are **app-specific instruction guides** that teach agents how to use apps effectively. Think of them as cheat sheets that help your agent understand:
+App 卡片是针对特定应用的**操作指南**，用于教会 Agent 如何更有效地使用应用。把它们看作是为 Agent 准备的备忘单，帮助 Agent 理解：
 
-- How to navigate the app's UI
-- Where to find buttons and features
-- App-specific shortcuts and gestures
-- Search syntax and filters (for apps like Gmail)
-- Common workflows and best practices
+- 如何在应用中导航界面
+- 在何处查找按钮与功能
+- 应用特有的快捷方式与手势
+- 搜索语法和过滤器（例如 Gmail 的搜索）
+- 常见工作流与最佳实践
 
-**Example:** When your agent opens Gmail, it automatically loads the Gmail app card and learns that:
-- The compose button is at the bottom-right
-- Search supports filters like `from:sender@email.com` or `has:attachment`
-- Swiping right archives emails, swiping left deletes them
+**示例：** 当 Agent 打开 Gmail 时，会自动加载 Gmail 的 App 卡片，并学到：
+- 撰写按钮位于右下角
+- 搜索支持 `from:sender@email.com` 或 `has:attachment` 等过滤语法
+- 向右滑动归档邮件，向左滑动删除邮件
 
-This knowledge helps agents complete tasks faster and more reliably.
-
----
-
-## Why Use App Cards?
-
-**Without app cards:**
-- Agents guess how to navigate unfamiliar apps
-- Trial-and-error wastes time and tokens
-- Success rates drop for complex workflows
-
-**With app cards:**
-- ✅ Agents know exactly where to find features
-- ✅ First-attempt success for common tasks
-- ✅ Reduced token usage (less exploration needed)
-- ✅ Better handling of app-specific quirks
+这些知识能帮助 Agent 更快速且更可靠地完成任务。
 
 ---
 
-## Quick Start
+## 为什么要使用 App 卡片？
 
-Droidrun includes a sample Gmail app card to demonstrate how app cards work:
+**没有 App 卡片时：**
+- Agent 需要猜测如何在不熟悉的应用中导航
+- 反复试错会浪费时间与 Token
+- 复杂流程的成功率降低
+
+**使用 App 卡片时：**
+- ✅ Agent 能准确定位功能位置
+- ✅ 常见任务通常一次成功
+- ✅ 减少 Token 消耗（减少探索）
+- ✅ 更好地处理应用特有的奇性或例外情况
+
+---
+
+## 快速开始
+
+项目自带一个 Gmail 示例 App 卡片，用于演示 App 卡片的工作方式：
 
 ```bash
-# App cards are enabled by default
+# 默认启用 App 卡片
 droidrun run "Send an email to john@example.com" --reasoning
 ```
 
-When the agent opens Gmail, the Gmail app card automatically loads and guides the workflow.
+当 Agent 打开 Gmail 时，Gmail 的 App 卡片会自动加载并引导工作流。
 
-**Sample app card included:**
-- **Gmail** (`com.google.android.gm`) - Email navigation, search, composition
+**示例卡片（包含）：**
+- **Gmail** (`com.google.android.gm`) - 邮件导航、搜索、撰写
 
-You can use this as a template to create cards for other apps (see "Creating Custom App Cards" below).
+你可以将其作为模板为其他应用创建卡片（参见下文“创建自定义 App 卡片”）。
 
 ---
 
-## How App Cards Work
+## App 卡片的工作原理
 
-### Automatic Loading
+### 自动加载
 
-1. **Detection:** Agent detects the current foreground app (e.g., Gmail)
-2. **Loading:** Droidrun loads the app card for that package name
-3. **Injection:** App card content is added to the agent's prompt
-4. **Guidance:** Agent uses the instructions to make better decisions
+1. **检测：** Agent 检测到前台应用（例如 Gmail）
+2. **加载：** Droidrun 为该包名加载对应的 App 卡片
+3. **注入：** 将 App 卡片内容加入到 Agent 的提示中
+4. **引导：** Agent 使用这些指引做出更优决策
 
-**Technical note:** App cards are loaded asynchronously and cached in memory. Loading happens in the background and doesn't block agent execution.
+**技术说明：** App 卡片异步加载并缓存于内存，加载在后台进行，不会阻塞 Agent 执行。
 
-### When Are They Used?
+### 何时使用？
 
-App cards are used by the **Manager Agent** when running in reasoning mode (`--reasoning` flag or `reasoning: true` in config):
+App 卡片在推理模式下由 **Manager Agent** 使用（通过 `--reasoning` 标志或配置中的 `reasoning: true`）：
 
 ```bash
-# App cards enabled (Manager uses them for planning)
+# 启用 App 卡片（Manager 在规划时使用）
 droidrun run "Archive all unread emails" --reasoning
 
-# App cards not used (direct execution mode)
+# 直连执行模式下不使用 App 卡片
 droidrun run "Tap the button"
 ```
 
 ---
 
-## Creating Custom App Cards
+## 创建自定义 App 卡片
 
-Want to add an app card for your favorite app? Here's how:
+想为你常用的应用添加 App 卡片？按以下步骤操作：
 
-### Step 1: Find the Package Name
+### 步骤 1：查找包名
 
 ```bash
-# Get all apps
+# 列出所有安装的包
 adb shell pm list packages
 
-# Or search for a specific app
+# 或者筛选查找特定应用
 adb shell pm list packages | grep keyword
 ```
 
-**Common package names:**
+**常见包名示例：**
 - Chrome: `com.android.chrome`
 - WhatsApp: `com.whatsapp`
 - Instagram: `com.instagram.android`
 - YouTube: `com.google.android.youtube`
 
-### Step 2: Create the Files
+### 步骤 2：创建文件
 
-Create the app cards directory and files:
+创建 App 卡片目录与文件：
 
 ```bash
 mkdir -p config/app_cards
@@ -110,7 +110,7 @@ touch config/app_cards/app_cards.json
 touch config/app_cards/chrome.md
 ```
 
-**Example structure:**
+**示例结构：**
 
 ```markdown
 # Chrome App Guide
@@ -135,9 +135,9 @@ touch config/app_cards/chrome.md
 - Downloads accessible via three-dot menu → Downloads
 ```
 
-### Step 3: Register the App Card
+### 步骤 3：注册 App 卡片
 
-Add your app mapping to `config/app_cards/app_cards.json`:
+在 `config/app_cards/app_cards.json` 中添加映射：
 
 ```json
 {
@@ -146,7 +146,7 @@ Add your app mapping to `config/app_cards/app_cards.json`:
 }
 ```
 
-**Using subdirectories:**
+**使用子目录示例：**
 
 ```json
 {
@@ -155,22 +155,22 @@ Add your app mapping to `config/app_cards/app_cards.json`:
 }
 ```
 
-### Step 4: Test
+### 步骤 4：测试
 
 ```bash
 droidrun run "Open Chrome and search for droidrun" --reasoning --debug
 ```
 
-Look for this log message:
+查看日志信息：
 ```
 Loaded app card for com.android.chrome from config/app_cards/chrome.md
 ```
 
 ---
 
-## Configuration
+## 配置
 
-App cards are enabled by default and load from `config/app_cards/`:
+App 卡片默认启用，且从 `config/app_cards/` 加载：
 
 ```yaml
 agent:
@@ -179,7 +179,7 @@ agent:
     app_cards_dir: config/app_cards
 ```
 
-**To disable:**
+**若要禁用：**
 ```yaml
 agent:
   app_cards:
@@ -188,26 +188,26 @@ agent:
 
 ---
 
-## App Card Best Practices
+## App 卡片最佳实践
 
-### Content Guidelines
+### 内容指南
 
-**Do:**
-- Be concise and actionable
-- Focus on UI patterns and workflows
-- Include search syntax and special features
-- Mention common pitfalls or quirks
-- Use bullet points and clear headings
+**建议：**
+- 言简意赅且可操作
+- 侧重 UI 模式与工作流
+- 包含搜索语法与特殊功能说明
+- 提及常见坑与特殊行为
+- 使用要点与清晰标题
 
-**Don't:**
-- Write essays or lengthy explanations
-- Describe every single feature
-- Include information that changes frequently (version-specific details)
-- Duplicate general Android knowledge (agents already know how to tap, swipe, etc.)
+**不建议：**
+- 撰写长篇大论
+- 详尽描述每一个功能点
+- 包含频繁变动的信息（与版本相关的细节）
+- 重复一般性的 Android 知识（Agent 已知如何点击、滑动等）
 
-### Example: Good vs Bad
+### 示例：好与坏对比
 
-**❌ Bad (too verbose):**
+**❌ 不佳（过于冗长）：**
 ```markdown
 Gmail is an email application developed by Google. It has many features
 including the ability to send and receive emails. To compose an email,
@@ -215,7 +215,7 @@ you need to first understand that Gmail uses a material design interface
 with a floating action button, which is a circular button...
 ```
 
-**✅ Good (concise and actionable):**
+**✅ 优秀（简洁且可执行）：**
 ```markdown
 ## Composing Emails
 - Tap the floating compose button (bottom-right)
@@ -225,50 +225,50 @@ with a floating action button, which is a circular button...
 
 ---
 
-## Troubleshooting
+## 故障排查
 
-### App Card Not Loading
+### App 卡片未加载
 
-**Check these:**
+**检查项：**
 
-1. **Is the package name correct?**
+1. **包名是否正确？**
    ```bash
    adb shell dumpsys window windows | grep -E 'mCurrentFocus'
    ```
 
-2. **Is the mapping correct in app_cards.json?**
+2. **app_cards.json 中的映射是否正确？**
    ```json
    {
      "com.your.app": "yourapp.md"
    }
    ```
 
-3. **Does the markdown file exist?**
+3. **Markdown 文件是否存在？**
    ```bash
    ls config/app_cards/yourapp.md
    ```
 
-4. **Are app cards enabled?**
+4. **App 卡片功能是否启用？**
    ```yaml
    agent:
      app_cards:
        enabled: true
    ```
 
-5. **Are you using reasoning mode?**
+5. **是否在使用推理模式？**
    ```bash
    droidrun run "command" --reasoning
    ```
 
-### Debug Mode
+### 调试模式
 
-Run with `--debug` to see app card loading:
+使用 `--debug` 可查看 App 卡片加载情况：
 
 ```bash
 droidrun run "Open Gmail" --reasoning --debug
 ```
 
-Look for these log messages:
+查看日志输出：
 ```
 Loaded app_cards.json with 2 entries
 Loaded app card for com.google.android.gm from config/app_cards/gmail.md
@@ -276,13 +276,13 @@ Loaded app card for com.google.android.gm from config/app_cards/gmail.md
 
 ---
 
-## Related Documentation
+## 相关文档
 
-- [CLI Usage](/guides/cli) - Droidrun CLI command reference
-- [Configuration](/sdk/configuration) - Configuration system details
-- [Agent Architecture](/concepts/architecture) - How agents work
-- [Manager Agent](/concepts/architecture#manageragent-planner) - Agent that uses app cards
+- [CLI Usage](/guides/cli) - Droidrun CLI 命令参考
+- [Configuration](/sdk/configuration) - 配置系统详情
+- [Agent Architecture](/concepts/architecture) - Agent 的工作方式
+- [Manager Agent](/concepts/architecture#manageragent-planner) - 使用 App 卡片的 Agent
 
 ---
 
-**Help your agents become app experts with well-crafted app cards!**
+**通过精心编写的 App 卡片，让你的 Agent 成为应用专家！**

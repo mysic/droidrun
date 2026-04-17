@@ -43,3 +43,44 @@ Telemetry is currently controlled only by the `DROIDRUN_TELEMETRY_ENABLED` envir
 </Note>
 
 ---
+
+## 为什么需要遥测
+
+遥测帮助我们：
+- 识别哪些功能使用最频繁并需改进
+- 基于真实使用情况优先修复 bug 和规划新功能
+- 确保 Droidrun 在不同环境下表现良好
+
+<b>我们不会收集任何个人或敏感数据。</b> 所有遥测数据均经过严格匿名化，仅用于改进框架并服务于所有用户。
+
+如有疑问或顾虑，请在 [GitHub](https://github.com/droidrun/droidrun) 上联系我们，或查看隐私政策。
+
+---
+
+## 遥测的开关控制
+
+Droidrun 会收集<b>匿名化</b>的使用数据，帮助我们了解哪些功能最有价值以及哪些地方需要改进。这些数据<b>绝不会</b>用于广告或个人跟踪，仅用于提升社区的使用体验。
+
+### 如何禁用遥测
+
+你可以随时通过设置环境变量来禁用遥测：
+
+```bash
+export DROIDRUN_TELEMETRY_ENABLED=false
+```
+
+将该行添加到你的 shell 配置文件（例如 `.bashrc`、`.zshrc` 或 `.profile`）以使其在会话间持久生效。
+
+### 如何重新启用遥测
+
+要重新启用遥测，请将环境变量设置为 `true`：
+
+```bash
+export DROIDRUN_TELEMETRY_ENABLED=true
+```
+
+<Note>
+当前遥测仅由环境变量 `DROIDRUN_TELEMETRY_ENABLED` 控制。尽管配置 schema 中存在 `telemetry.enabled` 选项，但遥测系统当前并未使用该配置项。
+</Note>
+
+---

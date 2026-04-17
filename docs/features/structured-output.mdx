@@ -272,3 +272,273 @@ async def finalize(self, ctx: Context, ev: FinalizeEvent) -> ResultEvent:
 - [Pydantic Documentation](https://docs.pydantic.dev/)
 - [Configuration Guide](/sdk/configuration)
 - [Custom Variables](/features/custom-variables)
+
+## 快速开始
+
+```python
+import asyncio
+from pydantic import BaseModel, Field
+from droidrun import DroidAgent, DroidConfig
+
+# 1. 定义输出结构
+class ContactInfo(BaseModel):
+    """设备中提取的联系人信息。"""
+    name: str = Field(description="联系人的全名")
+    phone: str = Field(description="电话号码")
+    email: str = Field(description="电子邮件地址", default="Not provided")
+
+# 2. 创建带 output_model 的 Agent
+async def main():
+    config = DroidConfig()
+
+    agent = DroidAgent(
+        goal="Find John Smith's contact information",
+        config=config,
+        output_model=ContactInfo,
+    )
+
+    # 3. 运行并访问结构化输出
+    result = await agent.run()
+
+    if result.success and result.structured_output:
+        contact: ContactInfo = result.structured_output
+        print(f"Name: {contact.name}")
+        print(f"Phone: {contact.phone}")
+        print(f"Email: {contact.email}")
+
+asyncio.run(main())
+```
+
+---
+
+## 工作原理
+
+### 两阶段流程
+
+**阶段 1：任务执行**
+- DroidAgent 在执行设备操作的同时收集所需信息
+- 系统提示会自动注入你的 Pydantic 模式
+- Agent 以包含数据的自然语言答案完成执行
+
+**阶段 2：提取（完成后）**
+- `StructuredOutputAgent` 接收最终的答案文本
+- 使用 LLM 的 `astructured_predict()` 将数据提取到你的模型中
+- 验证模式并返回类型化对象或 `None`
+
+---
+
+## 示例：发票提取
+
+```python
+from pydantic import BaseModel, Field
+from typing import List
+
+class Invoice(BaseModel):
+    """发票信息。"""
+    invoice_number: str = Field(description="发票编号")
+    vendor_name: str = Field(description="供应商名称")
+    total_due: float = Field(description="应付总额（美元）")
+
+agent = DroidAgent(
+    goal="Open Gmail and extract invoice from Acme Corp email",
+    config=DroidConfig(),
+    output_model=Invoice,
+)
+
+result = await agent.run()
+invoice = result.structured_output
+print(f"Invoice {invoice.invoice_number}: ${invoice.total_due}")
+```
+
+---
+
+## 处理结果
+
+### 访问数据
+
+```python
+result = await agent.run()
+
+if result.success:
+    if result.structured_output:
+        data = result.structured_output  # Pydantic 类型化对象
+        print(f"Extracted: {data}")
+    else:
+        print(f"提取失败，文本答案: {result.reason}")
+else:
+    print(f"任务失败: {result.reason}")
+```
+
+### 导出为 JSON
+
+```python
+result = await agent.run()
+
+if result.structured_output:
+    # 转为 JSON 并保存
+    json_str = result.structured_output.model_dump_json(indent=2)
+    with open("output.json", "w") as f:
+        f.write(json_str)
+```
+
+---
+
+## 配置
+
+### 自定义提取用的 LLM
+
+默认情况下，提取使用 `structured_output` 的 LLM 配置；如果未配置，则回退到 `fast_agent`。你也可以指定专用的 `structured_output` 配置：
+
+**config.yaml：**
+```yaml
+llm_profiles:
+  fast_agent:
+    provider: GoogleGenAI
+    model: gemini-3.1-flash-lite-preview
+    temperature: 0.3
+
+  structured_output:
+    provider: OpenAI
+    model: gpt-4o-mini
+    temperature: 0.0  # 低温以保证提取一致性
+```
+
+**以编程方式指定：**
+```python
+from droidrun import load_llm
+
+config = DroidConfig()
+
+llms = {
+    "fast_agent": load_llm("GoogleGenAI", "gemini-3.1-flash-lite-preview"),
+    "structured_output": load_llm("OpenAI", "gpt-4o-mini"),
+}
+
+agent = DroidAgent(
+    goal="Extract contact info for Alice",
+    llms=llms,
+    config=config,
+    output_model=ContactInfo,
+)
+```
+
+### 推理模式
+
+在直连模式和推理模式下均可工作：
+
+```python
+# 直连模式
+config = DroidConfig()
+config.agent.reasoning = False
+
+agent = DroidAgent(
+    goal="Find weather for SF",
+    config=config,
+    output_model=WeatherInfo,
+)
+
+# 推理模式
+config.agent.reasoning = True
+
+agent = DroidAgent(
+    goal="Find weather for SF",
+    config=config,
+    output_model=WeatherInfo,
+)
+```
+
+---
+
+## 最佳实践
+
+**1. 添加清晰的字段描述** - LLM 会使用这些描述来理解要提取的内容：
+```python
+name: str = Field(description="Full name of customer who placed order")
+```
+
+**2. 为可选字段提供默认值** - 防止提取失败：
+```python
+rating: Optional[float] = Field(description="Customer rating (1-5)", default=None)
+```
+
+**3. 在目标中引导数据收集**：
+```python
+agent = DroidAgent(
+    goal="Find contact and get their phone number, email, and full name",
+    config=config,
+    output_model=ContactInfo,
+)
+```
+
+---
+
+## 故障排查
+
+**提取返回 None：**
+- 确认已向 `DroidAgent` 传入 `output_model`
+- 检查任务是否成功：`result.success`
+- 启用调试日志：`config.logging.debug = True`
+
+**部分或不正确的数据：**
+- 添加更具体的字段描述
+- 在目标中明确列出必须的字段
+
+**验证错误：**
+- 对不确定字段使用 `Optional` 并提供默认值
+
+---
+
+## 高级
+
+### 多条目提取
+
+使用带 `List` 字段的模型来提取列表数据：
+
+```python
+class ContactList(BaseModel):
+    """多联系人集合。"""
+    contacts: List[ContactInfo] = Field(description="List of contacts")
+
+agent = DroidAgent(
+    goal="Find contacts for John Smith and Jane Doe",
+    config=config,
+    output_model=ContactList,
+)
+```
+
+### 工作流集成
+
+提取在 `DroidAgent.finalize()` 中自动进行：
+
+```python
+@step
+async def finalize(self, ctx: Context, ev: FinalizeEvent) -> ResultEvent:
+    result = ResultEvent(
+        success=ev.success,
+        reason=ev.reason,
+        steps=self.shared_state.step_number,
+        structured_output=None,
+    )
+
+    # 如果提供了模型则进行提取
+    if self.output_model is not None and ev.reason:
+        structured_agent = StructuredOutputAgent(
+            llm=self.structured_output_llm,
+            pydantic_model=self.output_model,
+            answer_text=ev.reason,
+        )
+        extraction_result = await structured_agent.run()
+        if extraction_result["success"]:
+            result.structured_output = extraction_result["structured_output"]
+
+    return result
+```
+
+---
+
+## 相关文档
+
+- [DroidAgent API](/sdk/droid-agent)
+- [Pydantic 文档](https://docs.pydantic.dev/)
+- [配置指南](/sdk/configuration)
+- [Custom Variables](/features/custom-variables)

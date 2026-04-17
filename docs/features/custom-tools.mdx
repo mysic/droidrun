@@ -396,3 +396,397 @@ agent = DroidAgent(
 ## Related
 
 See [Agent Architecture](/concepts/architecture) for understanding shared state and custom tools integration.
+
+## 概览
+
+自定义工具是扩展 Agent 能力的 Python 函数，超出内置原子动作（如点击、输入、滑动）的范畴。
+
+**使用场景示例：**
+- 外部 API 调用（Webhook、REST 服务）
+- 数据处理与计算
+- 数据库操作
+- 领域特定逻辑
+
+---
+
+## 快速开始
+
+### 基本示例
+
+简单的自定义工具（不访问设备）：
+
+```python
+import asyncio
+from droidrun import DroidAgent, DroidConfig
+
+def calculate_tax(amount: float, rate: float, **kwargs) -> str:
+    """计算税费并返回字符串结果。"""
+    tax = amount * rate
+    total = amount + tax
+    return f"Tax: ${tax:.2f}, Total: ${total:.2f}"
+
+custom_tools = {
+    "calculate_tax": {
+        "parameters": {
+            "amount": {"type": "number", "required": True},
+            "rate": {"type": "number", "required": True},
+        },
+        "description": "Calculate tax for a given amount and rate",
+        "function": calculate_tax
+    }
+}
+
+async def main():
+    config = DroidConfig()
+
+    agent = DroidAgent(
+        goal="Calculate tax for $100 at 8% rate",
+        config=config,
+        custom_tools=custom_tools
+    )
+
+    result = await agent.run()
+    print(result.success, result.reason)
+
+asyncio.run(main())
+```
+
+---
+
+## 工具结构
+
+所有自定义工具遵循以下格式：
+
+```python
+custom_tools = {
+    "tool_name": {
+        "parameters": {                          # 参数定义
+            "arg1": {"type": "string", "required": True},
+            "arg2": {"type": "string", "required": True},
+        },
+        "description": "Tool description...",    # 用于 LLM 提示
+        "function": callable_function            # Python 可调用函数
+    }
+}
+```
+
+**函数签名示例：**
+```python
+async def tool_name(arg1: type, arg2: type, *, ctx: ActionContext, **kwargs) -> str:
+    """
+    Args:
+        arg1: 参数说明
+        arg2: 参数说明
+        ctx: ActionContext（由注册表自动注入）
+    """
+    # 实现逻辑
+    return "result"
+```
+
+**要点：**
+- 在 `"parameters"` 中仅列出用户参数（不要包含 `ctx`）
+- `ctx`（`ActionContext` 实例）会作为关键字参数自动注入
+- 可通过 `ctx.driver` 访问设备，通过 `ctx.shared_state` 访问共享状态，通过 `ctx.credential_manager` 访问凭据
+- 使用 `**kwargs` 以保证向前兼容
+- 返回值建议为字符串（`str`）
+
+---
+
+## 使用 ActionContext
+
+通过自动注入的 `ctx` 参数访问设备和状态：
+
+```python
+async def screenshot_and_count(*, ctx, **kwargs) -> str:
+    """截图并统计 UI 元素数量。"""
+    # 通过 driver 获取截图
+    screenshot = await ctx.driver.screenshot()
+
+    # 通过 state_provider 获取 UI 状态
+    ui_state = await ctx.state_provider.get_state()
+    element_count = len(ui_state.elements) if ui_state else 0
+
+    return f"Screenshot taken. Found {element_count} UI elements"
+
+custom_tools = {
+    "screenshot_and_count": {
+        "parameters": {},
+        "description": "Take screenshot and count UI elements on screen",
+        "function": screenshot_and_count
+    }
+}
+```
+
+**`ctx` 可用项：**
+- `ctx.driver` - `DeviceDriver`（原始设备 I/O：截图、点击、滑动等）
+- `ctx.state_provider` - `StateProvider`（用于获取/解析 UI 状态）
+- `ctx.ui` - 当前 `UIState`（每步刷新）
+- `ctx.shared_state` - `DroidAgentState`（用于 Agent 协调）
+- `ctx.credential_manager` - `CredentialManager`（用于凭据访问）
+
+---
+
+## 访问共享状态
+
+通过 `ctx.shared_state` 访问 Agent 的状态：
+
+```python
+async def check_action_history(action_name: str, *, ctx, **kwargs) -> str:
+    """检查指定动作是否最近已执行。"""
+    shared_state = ctx.shared_state
+
+    # 检查最近动作
+    recent_actions = shared_state.action_history[-5:]
+    already_done = any(a.get("action") == action_name for a in recent_actions)
+
+    if already_done:
+        return f"Action '{action_name}' was already performed recently"
+
+    # 检查步骤计数
+    if shared_state.step_number > 10:
+        return "Warning: Task taking too many steps"
+
+    # 访问 fast memory
+    if any("skip_validation" in m for m in shared_state.fast_memory):
+        return "Validation skipped per memory"
+
+    return f"Action '{action_name}' not yet performed"
+
+custom_tools = {
+    "check_action_history": {
+        "parameters": {
+            "action_name": {"type": "string", "required": True},
+        },
+        "description": "Check if a specific action was recently performed in agent history",
+        "function": check_action_history
+    }
+}
+```
+
+**`DroidAgentState` 字段示例：**
+- `step_number` - 当前执行步数
+- `action_history` - 已执行动作列表
+- `action_outcomes` - 每个动作的成功/失败结果
+- `manager_memory` - Manager 的规划笔记（追加字符串）
+- `fast_memory` - FastAgent 的 remember() 条目（字符串列表，最多 10 条）
+- `custom_variables` - 用户提供的自定义变量
+- `visited_packages` - 访问过的应用
+- `current_package_name` - 当前应用包名
+- `plan` - Manager 当前计划
+- 更多字段见 `droidrun/agent/droid/state.py`
+
+---
+
+## 常见模式
+
+### API 集成
+
+```python
+import requests
+
+def fetch_weather(city: str, **kwargs) -> str:
+    """从 API 获取天气数据。"""
+    try:
+        # 示例使用 OpenWeatherMap API
+        api_key = "your_api_key"
+        url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
+
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        temp = data["main"]["temp"] - 273.15  # 转为摄氏度
+        weather = data["weather"][0]["description"]
+
+        return f"Weather in {city}: {weather}, {temp:.1f}°C"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+custom_tools = {
+    "fetch_weather": {
+        "parameters": {
+            "city": {"type": "string", "required": True},
+        },
+        "description": "Fetch current weather data for a given city",
+        "function": fetch_weather
+    }
+}
+```
+
+### 数据库查询
+
+```python
+import sqlite3
+
+def query_database(query: str, **kwargs) -> str:
+    """查询本地数据库。"""
+    try:
+        conn = sqlite3.connect("app.db")
+        cursor = conn.execute(query)
+        results = cursor.fetchall()
+        conn.close()
+
+        return f"Found {len(results)} results"
+    except Exception as e:
+        return f"Database error: {str(e)}"
+
+custom_tools = {
+    "query_database": {
+        "parameters": {
+            "query": {"type": "string", "required": True},
+        },
+        "description": "Execute SQL query on local database and return results",
+        "function": query_database
+    }
+}
+```
+
+### 异步操作
+
+```python
+import aiohttp
+
+async def fetch_async(url: str, **kwargs) -> str:
+    """异步获取数据。"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                data = await response.text()
+                return f"Fetched {len(data)} bytes from {url}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+custom_tools = {
+    "fetch_async": {
+        "parameters": {
+            "url": {"type": "string", "required": True},
+        },
+        "description": "Asynchronously fetch data from a URL",
+        "function": fetch_async
+    }
+}
+```
+
+---
+
+## 最佳实践
+
+### 1. 清晰描述
+为工具写清晰、具体的描述：
+
+```python
+# 推荐
+"description": "Send POST request to webhook URL with JSON data payload"
+
+# 不推荐
+"description": "Send webhook"
+```
+
+### 2. 错误处理
+始终捕获并处理异常：
+
+```python
+def robust_tool(url: str, **kwargs) -> str:
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return f"Success: {response.status_code}"
+    except requests.Timeout:
+        return "Error: Request timed out"
+    except requests.RequestException as e:
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
+```
+
+### 3. 参数校验
+在处理前校验输入参数：
+
+```python
+def validated_tool(count: int, **kwargs) -> str:
+    if not isinstance(count, int):
+        return "Error: count must be integer"
+    if count < 0 or count > 100:
+        return "Error: count must be 0-100"
+
+    return f"Processed {count} items"
+```
+
+### 4. 日志记录
+使用 Python 的 logging 记录调试信息：
+
+```python
+import logging
+logger = logging.getLogger("droidrun")
+
+def logged_tool(data: str, **kwargs) -> str:
+    logger.info(f"Processing: {data[:50]}...")
+    # 处理逻辑
+    logger.info("Complete")
+    return "Success"
+```
+
+---
+
+## 高级示例
+
+结合 ActionContext、共享状态与凭据：
+
+```python
+import requests
+
+async def send_authenticated_request(
+    url: str,
+    data: str,
+    *,
+    ctx,
+    **kwargs
+) -> str:
+    """使用凭据发送带认证的 API 请求。"""
+    try:
+        # 通过 ActionContext 访问凭据
+        if not ctx.credential_manager:
+            return "Error: Credential manager not available"
+
+        api_key = await ctx.credential_manager.resolve_key("API_KEY")
+
+        # 检查请求次数是否过多
+        if ctx.shared_state.step_number > 15:
+            return "Error: Too many API calls"
+
+        # 发送带认证的请求
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.post(url, json={"data": data}, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        return f"Request successful: {response.status_code}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+custom_tools = {
+    "send_authenticated_request": {
+        "parameters": {
+            "url": {"type": "string", "required": True},
+            "data": {"type": "string", "required": True},
+        },
+        "description": "Send authenticated API request using stored credentials",
+        "function": send_authenticated_request
+    }
+}
+
+# 与凭据一起使用
+credentials = {"API_KEY": "sk-1234567890"}
+
+agent = DroidAgent(
+    goal="Send data to API",
+    config=config,
+    custom_tools=custom_tools,
+    credentials=credentials
+)
+```
+
+---
+
+## 相关
+
+参见 [Agent Architecture](/concepts/architecture) 了解共享状态与自定义工具的集成方式。

@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../droidrun-portal"
+		},
+		{
+			"path": "../tutor"
 		}
 	]
 }

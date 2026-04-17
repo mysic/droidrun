@@ -61,3 +61,32 @@ class DroidAgentState(BaseModel):
     # Custom variables
     custom_variables: Dict = {}                # User-defined data
 ```
+
+## 什么是“共享状态”？
+
+`DroidAgentState` 是一个基于 Pydantic 的模型，用作 Droidrun 多智能体工作流的**中心协调机制**。它是一个所有 Agent（Manager、Executor、FastAgent）都可读写的共享数据结构。
+
+共享状态的作用包括：
+- **跨 Agent 通信**：各 Agent 共享关于动作、结果和错误的信息
+- **进度追踪**：记录步骤计数、动作历史、访问的应用/页面
+- **记忆管理**：Agent 的记忆、用户自定义变量与会话数据
+- **错误协调**：错误标志、升级阈值与错误描述
+
+**关键点**：共享状态替代了复杂的消息传递机制。Agent 不需要反复发送消息，而是更新同一个共享对象。
+
+## 核心状态字段（说明）
+
+下列字段位于 `DroidAgentState` 中（参见下面的代码片段）：
+
+- `instruction`：原始任务描述
+- `step_number`：当前步骤编号
+- `formatted_device_state` / `current_package_name` / `current_activity_name`：设备与当前界面信息
+- `action_history` / `action_outcomes` / `summary_history`：动作记录与结果摘要
+- `manager_memory` / `fast_memory`：Agent 的记忆存储
+- `plan` / `current_subgoal` / `answer`：Manager 的计划与当前子目标
+- `finished` / `success`：任务完成与成功状态
+- `error_flag_plan` / `error_descriptions` / `err_to_manager_thresh`：错误处理与升级阈值
+- `message_history` / `pending_user_messages`：消息历史与外部注入队列
+- `custom_variables`：用户定义的自定义变量
+
+（下面的 Python 代码块保留了字段定义以便参考。）

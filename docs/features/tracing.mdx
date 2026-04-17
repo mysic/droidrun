@@ -115,15 +115,128 @@ Langfuse provides LLM observability with features like session tracking, user an
 - **Self-hosted**: Deploy using [Langfuse docs](https://langfuse.com/docs/deployment/self-host)
 
 **2. Configure Droidrun:**
+Droidrun 提供多种监控能力：
 
-**Via environment variables:**
+1. **LLM 跟踪** — 通过 Arize Phoenix 或 Langfuse 进行实时执行追踪
+2. **轨迹记录** — 本地保存截图和 UI 状态以便调试
+
+## 快速参考
+
+```sh
+# Enable Phoenix tracing
+droidrun run "task" --tracing
+
+# Enable trajectory recording
+droidrun run "task" --save-trajectory step
+```
+
+---
+
+## LLM 跟踪
+
+Droidrun 支持两个追踪提供者，用于实时监控 LLM 调用、代理执行和工具调用：
+
+- **Arize Phoenix**（默认） — 开源可观测性平台
+- **Langfuse** — 提供云端与自托管选项的 LLM 工程平台
+
+使用追踪可以调试代理行为、监控 token 使用并分析执行流程。
+
+---
+
+### Arize Phoenix 跟踪
+
+#### 设置
+
+**1. 安装 Phoenix：**
+
+```sh
+uv pip install arize-phoenix
+```
+
+**2. 启动 Phoenix 服务：**
+
+```sh
+phoenix serve
+```
+
+服务器在 `http://localhost:6006` 启动，提供用于查看追踪的 Web 界面。
+
+**3. 在 Droidrun 中启用追踪：**
+
+**通过 CLI：**
+
+```sh
+droidrun run "Open settings" --tracing
+```
+
+**通过 config.yaml：**
+
+```yaml
+tracing:
+  enabled: true
+```
+
+**通过代码：**
+
+```python
+from droidrun import DroidAgent, DroidConfig
+
+config = DroidConfig()
+config.tracing.enabled = True
+
+agent = DroidAgent(goal="Open settings", config=config)
+await agent.run()
+```
+
+**4. 查看追踪：**
+
+访问 `http://localhost:6006` 查看：
+- 带有提示、响应和 token 计数的 LLM 调用
+- 代理工作流执行（Manager、Executor、FastAgent）
+- 工具调用及其结果
+- 执行时长和错误
+
+更多使用说明请参见 [Arize Phoenix 文档](https://docs.arize.com/phoenix)。
+
+#### Phoenix 配置
+
+设置环境变量以自定义 Phoenix：
+
+```sh
+# Custom Phoenix server URL (default: http://0.0.0.0:6006)
+export phoenix_url=http://localhost:6006
+
+# Project name for organizing traces
+export phoenix_project_name=my_droidrun_project
+```
+
+<Note>
+环境变量名称为小写：`phoenix_url` 和 `phoenix_project_name`。
+</Note>
+
+---
+
+### Langfuse 跟踪
+
+Langfuse 提供 LLM 可观测性功能，例如会话跟踪、用户分析和成本监控。
+
+#### 设置
+
+**1. 获取 Langfuse 凭证：**
+- **云端**：在 [cloud.langfuse.com](https://cloud.langfuse.com) 注册
+- **自托管**：参照 [Langfuse 文档](https://langfuse.com/docs/deployment/self-host) 进行部署
+
+**2. 配置 Droidrun：**
+
+**通过环境变量：**
 ```sh
 export LANGFUSE_SECRET_KEY=sk-lf-...
 export LANGFUSE_PUBLIC_KEY=pk-lf-...
 export LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 
-**Via config.yaml:**
+**通过 config.yaml：**
+
 ```yaml
 tracing:
   enabled: true
@@ -135,7 +248,8 @@ tracing:
   langfuse_session_id: ""              # Optional: custom session ID
 ```
 
-**Via code:**
+**通过代码：**
+
 ```python
 from droidrun import DroidAgent, DroidConfig, TracingConfig
 
@@ -154,48 +268,48 @@ agent = DroidAgent(goal="Open settings", config=config)
 await agent.run()
 ```
 
-**3. View traces:**
+**3. 查看追踪：**
 
-Navigate to your Langfuse dashboard to see:
-- LLM calls with prompts, completions, and token usage
-- Agent execution traces and nested workflows
-- Session-based analytics and cost tracking
-- User-level metrics (if `langfuse_user_id` is set)
+访问你的 Langfuse 仪表盘查看：
+- 包含提示、完成结果及 token 使用情况的 LLM 调用
+- 代理执行追踪与嵌套工作流
+- 基于会话的分析及成本跟踪
+- 用户级指标（如果设置了 `langfuse_user_id`）
 
-For more on using Langfuse, see the [Langfuse documentation](https://langfuse.com/docs).
+更多使用说明请参见 [Langfuse 文档](https://langfuse.com/docs)。
 
 ---
 
-## Trajectory Recording
+## 轨迹记录
 
-Trajectory recording saves screenshots and UI state locally for offline debugging and analysis. Unlike telemetry (sent to PostHog) and tracing (sent to Phoenix or Langfuse), trajectories stay on your machine.
+轨迹记录会将截图和 UI 状态保存在本地，用于离线调试和分析。与发送到 PostHog 的遥测（telemetry）和发送到 Phoenix 或 Langfuse 的追踪不同，轨迹文件保存在你的机器上。
 
-### Recording Levels
+### 记录级别
 
-| Level | What's Saved | When to Use |
+| 级别 | 保存内容 | 何时使用 |
 |-------|--------------|-------------|
-| `none` (default) | Nothing | Production use, saves disk space |
-| `step` | Screenshot + state per agent step | General debugging, recommended for most use cases |
-| `action` | Screenshot + state per atomic action | Detailed debugging, captures every tap/swipe/type |
+| `none`（默认） | 无 | 生产环境使用，节省磁盘空间 |
+| `step` | 每个代理步骤保存截图与状态 | 一般调试，推荐用于大多数场景 |
+| `action` | 每个原子操作保存截图与状态 | 详细调试，捕捉每次点击/滑动/输入 |
 
-**Note:** `action` level generates significantly more files than `step` level.
+**注意：** `action` 级别会生成比 `step` 级别多得多的文件。
 
-### Enable Recording
+### 启用记录
 
-**Via CLI:**
+**通过 CLI：**
 
 ```sh
 droidrun run "Open settings" --save-trajectory step
 ```
 
-**Via config.yaml:**
+**通过 config.yaml：**
 
 ```yaml
 logging:
   save_trajectory: step  # none | step | action
 ```
 
-**Via code:**
+**通过代码：**
 
 ```python
 from droidrun import DroidAgent, DroidConfig
@@ -207,9 +321,9 @@ agent = DroidAgent(goal="Open settings", config=config)
 await agent.run()
 ```
 
-### Output Location
+### 输出位置
 
-Trajectories are saved to `trajectories/` in your working directory:
+轨迹保存在当前工作目录下的 `trajectories/`：
 
 ```
 trajectories/
@@ -220,24 +334,24 @@ trajectories/
     └── step_001_state.json
 ```
 
-Each trajectory folder contains:
-- **Screenshots** - PNG images of the device screen at each step/action
-- **State files** - JSON files with:
-  - UI accessibility tree (element hierarchy with IDs, text, bounds)
-  - Action executed (e.g., `click(5)`, `type("hello", 3)`)
-  - Agent reasoning and step number
-  - Device state (current app package, activity)
+每个轨迹文件夹包含：
+- **Screenshots** - 每步的设备屏幕 PNG 图像
+- **State files** - 包含以下内容的 JSON 文件：
+  - UI 可访问性树（元素层级、ID、文本、边界）
+  - 执行的操作（例如 `click(5)`, `type("hello", 3)`）
+  - 代理推理和步骤编号
+  - 设备状态（当前应用包名、activity）
 
-Use these files to:
-- Debug why the agent made specific decisions
-- Replay failed executions
-- Analyze UI element detection issues
-- Build training datasets for agent improvement
+使用这些文件可以：
+- 调试代理为何做出特定决策
+- 回放失败执行
+- 分析 UI 元素检测问题
+- 为改进代理构建训练数据集
 
 ---
 
-## Related Documentation
+## 相关文档
 
-- [Configuration System](/sdk/configuration) - Configure tracing and telemetry settings
-- [Events and Workflows](/concepts/events-and-workflows) - Build custom monitoring integrations
-- [CLI Usage](/guides/cli) - Command-line flags for monitoring
+- [配置系统](/sdk/configuration) — 配置追踪和遥测设置
+- [事件与工作流](/concepts/events-and-workflows) — 构建自定义监控集成
+- [CLI 使用](/guides/cli) — 监控相关的命令行标志
