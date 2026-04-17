@@ -89,6 +89,7 @@ def coro(f):
 
 
 
+# 教程注释：run_command 是 CLI 真正的主流程，负责加载配置、应用命令行覆盖、创建 DroidAgent 并驱动执行。
 async def run_command(
     command: str,
     config_path: str | None = None,
@@ -375,6 +376,7 @@ except Exception:
     _available_agents = []
 
 
+# 教程注释：run 命令把命令行参数映射到 run_command，是用户最常触发的自然语言执行入口。
 @cli.command()
 @click.argument("command", type=str)
 @click.option("--config", "-c", help="Path to custom config file", default=None)

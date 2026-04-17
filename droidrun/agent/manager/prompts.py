@@ -5,6 +5,7 @@ Prompts for the ManagerAgent.
 import re
 
 
+# 教程注释：把 Manager LLM 返回的标签文本解析为结构化字段，供调度器读取 next step。
 def parse_manager_response(response: str) -> dict:
     """
     Parse manager LLM response into structured dict.

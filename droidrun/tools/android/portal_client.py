@@ -41,6 +41,8 @@ class PortalClient:
     Content provider mode works without port forwarding but has higher latency.
     """
 
+    # 教程注释：PortalClient 是 Android 通信总入口，对上层提供“统一方法 + 自动通道回退”。
+
     def __init__(self, device: AdbDevice, prefer_tcp: bool = False):
         """
         Initialize Portal client.
@@ -140,6 +142,7 @@ class PortalClient:
         4. Test connection with authenticated ping
         5. Set tcp_available flag
         """
+        # 教程注释：这里实现 TCP 优先策略，失败时不会中断流程，而是自动降级到 content provider。
         try:
             # Step 1: Fetch auth token before any HTTP calls
             self._auth_token = await self._fetch_auth_token()
@@ -254,6 +257,7 @@ class PortalClient:
         Returns:
             The httpx.Response (possibly from the retry attempt).
         """
+        # 教程注释：统一封装鉴权失败重试，避免每个调用点重复处理 token 轮换。
         headers = {**self._tcp_headers, **(extra_headers or {})}
         response = await client.request(method, url, headers=headers, **kwargs)
 
@@ -345,6 +349,7 @@ class PortalClient:
         Returns:
             Dictionary containing 'a11y_tree' and 'phone_state' keys
         """
+        # 教程注释：状态读取优先走 TCP，高性能；不可用时自动走 content provider 保底。
         await self._ensure_connected()
         if self.tcp_available:
             return await self._get_state_tcp()
@@ -439,6 +444,7 @@ class PortalClient:
         Returns:
             True if successful, False otherwise
         """
+        # 教程注释：文本输入同样使用双通道策略，尽量保证在弱网络或服务异常时仍可输入。
         await self._ensure_connected()
         if self.tcp_available:
             return await self._input_text_tcp(text, clear)
@@ -498,6 +504,7 @@ class PortalClient:
         Returns:
             Screenshot image bytes (PNG format)
         """
+        # 教程注释：截图优先使用 Portal TCP 返回结构化响应，失败即回退 ADB screencap。
         await self._ensure_connected()
         if self.tcp_available:
             return await self._take_screenshot_tcp(hide_overlay)

@@ -28,6 +28,7 @@ COMMANDS: list[Command] = [
 ]
 
 
+# 教程注释：match_commands 支持主命令名和 alias 前缀匹配，是斜杠下拉补全的核心数据来源。
 def match_commands(query: str) -> list[Command]:
     """
     Match query against canonical names and aliases.
@@ -60,6 +61,7 @@ def match_commands(query: str) -> list[Command]:
     return sorted(results, key=lambda c: c.name)
 
 
+# 教程注释：resolve_command 用于提交时做精确解析，保证 alias 最终也能落到唯一的命令定义上。
 def resolve_command(text: str) -> Command | None:
     """Resolve exact command name or alias to a Command."""
     text = text.lower().strip()

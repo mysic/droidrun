@@ -12,6 +12,7 @@ from droidrun.mcp.config import MCPConfig, MCPServerConfig
 
 
 # ---------- Config Schema ----------
+# 教程注释：LLMProfile 描述一个模型配置条目，并负责把配置转成真正可传给 load_llm 的参数。
 @dataclass
 class LLMProfile:
     """LLM profile configuration."""
@@ -85,6 +86,7 @@ class FastAgentConfig:
 class ManagerConfig:
     vision: bool = False
     system_prompt: str = "config/prompts/manager/system.jinja2"
+    # 教程注释：stateless=True 时改用 StatelessManagerAgent，每轮不保留完整多轮对话历史，只重建当前上下文。
     stateless: bool = False
 
 
@@ -121,6 +123,7 @@ class AgentConfig:
     executor: ExecutorConfig = field(default_factory=ExecutorConfig)
     app_cards: AppCardConfig = field(default_factory=AppCardConfig)
 
+    # 教程注释：这些辅助方法会先通过 PathResolver 找到实际 Prompt 文件路径，再给 PromptLoader 使用。
     def get_fast_agent_system_prompt_path(self) -> str:
         return str(PathResolver.resolve(self.fast_agent.system_prompt, must_exist=True))
 
@@ -198,6 +201,8 @@ class CredentialsConfig:
     file_path: str = "config/credentials.yaml"
 
 
+
+# 教程注释：DroidConfig 是整个项目的总配置对象，组合了 Agent、设备、日志、Tracing、MCP 等所有子配置。
 @dataclass
 class DroidConfig:
     """Complete Droidrun configuration schema."""
@@ -263,6 +268,7 @@ class DroidConfig:
         }
         return result
 
+    # 教程注释：from_dict 会把原始 YAML/JSON 字典转换成强类型配置对象，并顺手构造嵌套子配置。
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DroidConfig":
         """Create config from dictionary."""

@@ -18,6 +18,7 @@ logger = logging.getLogger("droidrun-macro")
 _KEYCODE_TO_BUTTON = {4: "back", 3: "home", 66: "enter"}
 
 
+# 教程注释：MacroPlayer 负责把录制的动作序列回放到设备上，是“可复现自动化”的执行器。
 class MacroPlayer:
     """
     A class for loading and replaying Droidrun macro sequences.
@@ -70,6 +71,7 @@ class MacroPlayer:
         """
         return Trajectory.load_macro_sequence(trajectory_folder)
 
+    # 教程注释：replay_action 按 action_type 分发到对应 driver 调用，是单步动作回放核心。
     async def replay_action(self, action: Dict[str, Any]) -> bool:
         """
         Replay a single action.
@@ -169,6 +171,7 @@ class MacroPlayer:
             logger.error(f"❌ Error executing action {action_type}: {e}")
             return False
 
+    # 教程注释：replay_macro 会按顺序执行整段动作并统计成功率，支持从中间步骤开始和限制步数。
     async def replay_macro(
         self,
         macro_data: Dict[str, Any],
@@ -272,6 +275,7 @@ async def replay_macro_file(
     Returns:
         True if replay was successful, False otherwise
     """
+    # 教程注释：文件回放快捷入口，适合脚本或测试场景直接调用。
     player = MacroPlayer(
         device_serial=device_serial, delay_between_actions=delay_between_actions
     )
@@ -306,6 +310,7 @@ async def replay_macro_folder(
     Returns:
         True if replay was successful, False otherwise
     """
+    # 教程注释：目录回放快捷入口，自动读取轨迹目录中的 macro.json。
     player = MacroPlayer(
         device_serial=device_serial, delay_between_actions=delay_between_actions
     )

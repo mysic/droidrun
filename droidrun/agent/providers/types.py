@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+# 教程注释：ProviderVariantSpec 描述“同一家 provider 在不同鉴权模式下的具体运行时配置”。
 @dataclass(frozen=True)
 class ProviderVariantSpec:
     """Internal provider runtime variant for a user-facing provider family."""
@@ -19,6 +20,7 @@ class ProviderVariantSpec:
     base_url: str | None = None
 
 
+# 教程注释：ProviderFamilySpec 是向用户展示的 provider 家族，内部可含多个 variant。
 @dataclass(frozen=True)
 class ProviderFamilySpec:
     """User-facing provider family shown during setup."""

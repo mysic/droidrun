@@ -16,6 +16,7 @@ ElementFilter = Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]
 
 def flatten_tree(root: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Recursively flatten tree to list of all nodes."""
+    # 教程注释：先把树拍平，后续文本匹配和空间过滤就能复用同一遍历逻辑。
     results = [root]
     for child in root.get("children", []):
         results.extend(flatten_tree(child))
@@ -54,6 +55,8 @@ def sort_by_position(nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 class Filters:
     """Composable filters for element search."""
 
+    # 教程注释：Filters 提供可组合的查询算子，支持“先定位锚点再做相对位置筛选”的链式查找。
+
     # ========== TEXT MATCHING ==========
 
     @staticmethod
@@ -62,6 +65,7 @@ class Filters:
         Match elements by text content in text, contentDescription, or hint fields.
         Supports exact match, regex, and newline normalization.
         """
+        # 教程注释：文本匹配会同时检查 text/contentDescription/hint，尽量覆盖不同控件字段。
         if isinstance(pattern, str):
             regex = re.compile(re.escape(pattern), re.IGNORECASE)
             pattern_str = pattern

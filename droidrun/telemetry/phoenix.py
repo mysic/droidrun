@@ -20,6 +20,7 @@ from openinference.instrumentation import TraceConfig
 dispatcher = get_dispatcher()
 
 
+# 教程注释：这个函数创建 Phoenix 回调处理器，把 LLM 调用和 Agent 执行链路接入 OpenTelemetry 导出器。
 def arize_phoenix_callback_handler(**kwargs: Any) -> BaseCallbackHandler:
     """
     Create and configure an Arize Phoenix callback handler for LlamaIndex.
@@ -74,6 +75,7 @@ def arize_phoenix_callback_handler(**kwargs: Any) -> BaseCallbackHandler:
     )
 
 
+# 教程注释：clean_span 是一个装饰器工厂，用来生成更清晰的 span 名称，便于后续查看 trace。
 def clean_span(span_name: str):
     """
     Create a span with a clean name (without class prefix).
@@ -96,6 +98,7 @@ def clean_span(span_name: str):
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
+            # 教程注释：异步包装分支手动触发 span_enter/span_exit，保证 async 函数也能保持正确父子关系。
             async def async_wrapper(*args, **kwargs):
                 # Import here to avoid circular imports
                 from llama_index_instrumentation.dispatcher import (
@@ -144,6 +147,7 @@ def clean_span(span_name: str):
         else:
 
             @functools.wraps(func)
+            # 教程注释：同步包装分支额外兼容 Future 返回值，这样延迟完成的任务也能在真正结束时关闭 span。
             def wrapper(*args, **kwargs):
                 # Import here to avoid circular imports
                 from llama_index_instrumentation.dispatcher import (

@@ -23,6 +23,8 @@ class MCPToolInfo:
     input_schema: dict
 
 
+
+# 教程注释：MCPClientManager 负责发现外部 MCP 工具、按需连接服务器并转发工具调用，是外部工具集成的核心管理器。
 class MCPClientManager:
     """Manages MCP server connections with lazy initialization."""
 
@@ -33,6 +35,7 @@ class MCPClientManager:
         self._sessions: dict = {}  # type: ignore
         self._exit_stacks: dict[str, AsyncExitStack] = {}
 
+    # 教程注释：discover_tools 会扫描所有启用的 MCP server，并缓存每个工具的元数据供后续注册使用。
     async def discover_tools(self) -> dict[str, MCPToolInfo]:
         """Discover tools from all configured servers."""
         if not self.config.enabled:
@@ -56,9 +59,13 @@ class MCPClientManager:
         self, server_name: str, config: "MCPServerConfig"
     ) -> None:
         """Connect temporarily to fetch tool schemas."""
+        # 教程注释：发现阶段使用临时连接拉取 schema，真正调用时再建立持久会话，降低空闲开销。
         # Lazy import to avoid circular dependency with droidrun.mcp package
-        from mcp.client.session import ClientSession
-        from mcp.client.stdio import StdioServerParameters, stdio_client
+        from mcp.client.session import ClientSession  # type: ignore[import-not-found]
+        from mcp.client.stdio import (  # type: ignore[import-not-found]
+            StdioServerParameters,
+            stdio_client,
+        )
 
         server_params = StdioServerParameters(
             command=config.command,
@@ -101,6 +108,7 @@ class MCPClientManager:
             return tool_name in config.include_tools
         return True
 
+    # 教程注释：call_tool 是真正执行外部 MCP 工具的入口，会先懒连接，再转发调用到对应 server。
     async def call_tool(self, tool_name: str, arguments: dict) -> Any:
         """Call an MCP tool, connecting lazily if needed."""
         if tool_name not in self._tools:
@@ -118,8 +126,11 @@ class MCPClientManager:
     async def _connect_server(self, server_name: str) -> None:
         """Establish persistent connection to a server."""
         # Lazy import to avoid circular dependency with droidrun.mcp package
-        from mcp.client.session import ClientSession
-        from mcp.client.stdio import StdioServerParameters, stdio_client
+        from mcp.client.session import ClientSession  # type: ignore[import-not-found]
+        from mcp.client.stdio import (  # type: ignore[import-not-found]
+            StdioServerParameters,
+            stdio_client,
+        )
 
         config = self.config.servers[server_name]
         server_params = StdioServerParameters(

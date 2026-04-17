@@ -93,6 +93,7 @@ class SettingsData:
     wait_for_stable_ui: float = 0.3
 
     @classmethod
+    # 教程注释：from_config 把后端 DroidConfig 映射成 TUI 可编辑的数据对象，起到“配置领域模型 -> 表单模型”的转换作用。
     def from_config(cls, config: DroidConfig) -> SettingsData:
         """Build settings from a loaded DroidConfig."""
         llm_profiles = config.llm_profiles or {}
@@ -166,6 +167,7 @@ class SettingsData:
             wait_for_stable_ui=config.agent.wait_for_stable_ui,
         )
 
+    # 教程注释：save 负责把用户在界面里修改过的设置落回真实配置文件，同时单独处理 API key 的持久化来源。
     def save(self) -> None:
         """Persist all settings: API keys to .env and config to config.yaml."""
         from droidrun.config_manager.loader import ConfigLoader
@@ -230,6 +232,7 @@ class SettingsData:
         cp.kwargs = SettingsData._build_kwargs(ps)
 
     def apply_to_config(self, config: DroidConfig) -> None:
+        # 教程注释：apply_to_config 是反向映射，把 TUI 数据对象写回真实 DroidConfig，供 CLI/TUI 共用后端配置。
         """Apply all TUI settings onto a DroidConfig, in place."""
         for role, ps in self.profiles.items():
             if role not in config.llm_profiles:

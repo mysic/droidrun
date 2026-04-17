@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：ExecutorAgent 是“执行器”，接收一个明确子目标后，负责选择并执行一次最合适的动作。
 class ExecutorAgent(Workflow):
     """
     Action execution agent that performs specific actions.
@@ -72,6 +73,7 @@ class ExecutorAgent(Workflow):
 
         logger.debug("ExecutorAgent initialized.")
 
+    # 教程注释：先把当前设备状态、计划、历史动作拼成执行 Prompt，让模型知道“此刻该完成哪一步”。
     @step
     async def prepare_context(
         self, ctx: Context, ev: StartEvent
@@ -145,6 +147,7 @@ class ExecutorAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这一阶段只做一件事，就是向 LLM 请求“下一步动作建议”，还不真正执行。
     @step
     async def get_response(
         self, ctx: Context, ev: ExecutorContextEvent
@@ -185,6 +188,7 @@ class ExecutorAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：把模型返回的文本解析成 thought、description 和 action JSON，准备进入真实执行。
     @step
     async def process_response(
         self, ctx: Context, ev: ExecutorResponseEvent
@@ -218,6 +222,7 @@ class ExecutorAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这里把 action JSON 分发给 ToolRegistry，相当于把“模型决策”转成“程序动作”。
     @step
     async def execute(
         self, ctx: Context, ev: ExecutorActionEvent
@@ -265,6 +270,7 @@ class ExecutorAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：执行器最后把本轮动作结果打包返回给父工作流，供 Manager 或上层控制器继续判断。
     @step
     async def finalize(self, ctx: Context, ev: ExecutorActionResultEvent) -> StopEvent:
         """Return executor results to parent workflow."""

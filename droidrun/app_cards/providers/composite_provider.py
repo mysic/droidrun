@@ -14,6 +14,7 @@ from droidrun.app_cards.providers.server_provider import ServerAppCardProvider
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：组合 provider 采用“远程优先、本地回退”策略，在可用性和新鲜度之间做平衡。
 class CompositeAppCardProvider(AppCardProvider):
     """
     Load app cards from server with local fallback.
@@ -47,6 +48,7 @@ class CompositeAppCardProvider(AppCardProvider):
         )
         self.local_provider = LocalAppCardProvider(app_cards_dir=app_cards_dir)
 
+    # 教程注释：优先尝试 server 结果，若为空或失败再退回 local，尽量保证总能给出可用卡片。
     async def load_app_card(self, package_name: str, instruction: str = "") -> str:
         """
         Load app card with server-first, local-fallback strategy.

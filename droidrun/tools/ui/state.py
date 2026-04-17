@@ -12,6 +12,7 @@ from droidrun.tools.helpers.coordinate import to_absolute
 from droidrun.tools.helpers.geometry import find_clear_point, rects_overlap
 
 
+# 教程注释：UIState 保存“某一时刻的界面快照”，并提供索引查找、坐标换算、元素信息提取等能力。
 class UIState:
     """Holds parsed UI elements for a single device state snapshot."""
 
@@ -39,6 +40,7 @@ class UIState:
         """Recursively find an element by its index."""
         return self._find_by_index(self.elements, index)
 
+    # 教程注释：这个方法把元素索引解析成可点击的中心点坐标，是 click 等动作的关键前置步骤。
     def get_element_coords(self, index: int) -> Tuple[int, int]:
         """Return the centre (x, y) of element *index*.
 
@@ -101,6 +103,7 @@ class UIState:
 
         Falls back to the centre if no clear point exists.
         """
+        # 教程注释：通过检测高索引覆盖元素来找“可点击空白点”，减少遮挡导致的误触。
         element = self._find_by_index(self.elements, index)
         if element is None:
             raise ValueError(f"No element found with index {index}")
@@ -128,6 +131,7 @@ class UIState:
             )
         return point
 
+    # 教程注释：当系统使用归一化坐标时，这里负责把相对点位换算成真实屏幕像素坐标。
     def convert_point(self, x: int, y: int) -> Tuple[int, int]:
         """Convert point to absolute pixels if normalized mode is active."""
         if self.use_normalized:

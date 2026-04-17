@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：FastAgent 是“一体化代理”，自己完成思考、调工具、读取结果和循环推进，适合无需复杂规划的任务。
 class FastAgent(Workflow):
     """Agent that uses XML tool-calling instead of code generation.
 
@@ -168,6 +169,7 @@ class FastAgent(Workflow):
             )
         return ChatMessage(role="user", content=user_text)
 
+    # 教程注释：初始化对话，把系统提示和用户目标放入历史，作为 FastAgent 闭环执行的起点。
     @step
     async def prepare_chat(self, ctx: Context, ev: StartEvent) -> FastAgentInputEvent:
         """Initialize message history with goal."""
@@ -209,6 +211,7 @@ class FastAgent(Workflow):
 
         return FastAgentInputEvent()
 
+    # 教程注释：每一轮先抓取截图和 UI 状态，再把这些现场信息注入消息，随后调用 LLM 生成下一步工具调用。
     @step
     async def handle_llm_input(
         self, ctx: Context, ev: FastAgentInputEvent
@@ -218,6 +221,7 @@ class FastAgent(Workflow):
 
         # Check then bump step counter
         if self.shared_state.step_number >= self.max_steps:
+            # 教程注释：FastAgent 触顶时同样会先清空并上报未消费的外部消息，避免调用方误以为消息还会被后续处理。
             pending = self.shared_state.drain_user_messages()
             if pending:
                 logger.warning(
@@ -392,6 +396,7 @@ class FastAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这里判断模型有没有按协议给出工具调用；有就进入执行，没有就继续追问模型。
     @step
     async def handle_llm_output(
         self, ctx: Context, ev: FastAgentResponseEvent
@@ -434,6 +439,7 @@ class FastAgent(Workflow):
             )
             return FastAgentInputEvent()
 
+    # 教程注释：把解析后的多个工具调用逐个交给 ToolRegistry 执行，并把执行结果重新组织成 XML 反馈给模型。
     @step
     async def execute_code(
         self, ctx: Context, ev: FastAgentToolCallEvent
@@ -473,6 +479,7 @@ class FastAgent(Workflow):
 
             # Check if complete() was called successfully
             if self.shared_state.finished:
+                # 教程注释：如果 complete() 之后队列里又来了新消息，FastAgent 会撤销本次结束意图，继续下一轮处理新要求。
                 if self.shared_state.pending_user_messages:
                     logger.info(
                         "⏸️ complete() called but external messages pending, continuing",
@@ -521,6 +528,7 @@ class FastAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：把工具执行结果加入消息历史，形成“观察结果”，然后回到下一轮思考，实现代理闭环。
     @step
     async def handle_execution_result(
         self, ctx: Context, ev: FastAgentOutputEvent
@@ -554,6 +562,7 @@ class FastAgent(Workflow):
 
         return FastAgentInputEvent()
 
+    # 教程注释：当 complete 工具或异常终止触发结束时，这里负责把最终成功状态和原因返回给上层。
     @step
     async def finalize(self, ev: FastAgentEndEvent, ctx: Context) -> StopEvent:
         self.shared_state.finished = False

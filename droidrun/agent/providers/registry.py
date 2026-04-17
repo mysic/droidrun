@@ -11,6 +11,7 @@ from droidrun.config_manager.credential_paths import (
 )
 
 
+# 教程注释：VARIANT_ENV_KEY_SLOT 定义“provider variant -> env_keys 槽位名”的统一映射。
 # Canonical mapping from variant ID to env-key slot name.
 # Imported by setup_service, configure_wizard, config_manager, and TUI.
 VARIANT_ENV_KEY_SLOT: dict[str, str] = {
@@ -23,6 +24,7 @@ VARIANT_ENV_KEY_SLOT: dict[str, str] = {
 }
 
 
+# 教程注释：PROVIDER_FAMILIES 是 setup wizard 的主数据源，维护展示名、鉴权模式和模型列表。
 PROVIDER_FAMILIES: tuple[ProviderFamilySpec, ...] = (
     ProviderFamilySpec(
         id="gemini",
@@ -209,10 +211,12 @@ PROVIDER_FAMILIES: tuple[ProviderFamilySpec, ...] = (
 )
 
 
+# 教程注释：列出所有可选 provider family，供 UI/Wizard 构建选项。
 def list_provider_families() -> tuple[ProviderFamilySpec, ...]:
     return PROVIDER_FAMILIES
 
 
+# 教程注释：按 family_id 查找 provider 家族；找不到会抛 KeyError。
 def get_provider_family(family_id: str) -> ProviderFamilySpec:
     for family in PROVIDER_FAMILIES:
         if family.id == family_id:
@@ -220,11 +224,13 @@ def get_provider_family(family_id: str) -> ProviderFamilySpec:
     raise KeyError(f"Unknown provider family: {family_id}")
 
 
+# 教程注释：列出某个 family 支持的 auth mode，用于二级选择。
 def list_auth_modes(family_id: str) -> tuple[str, ...]:
     family = get_provider_family(family_id)
     return tuple(variant.auth_mode for variant in family.variants)
 
 
+# 教程注释：把 family + auth_mode 解析为最终 ProviderVariantSpec。
 def resolve_provider_variant(
     family_id: str, auth_mode: str | None = None
 ) -> ProviderVariantSpec:
@@ -241,12 +247,14 @@ def resolve_provider_variant(
     raise KeyError(f"Unknown auth mode {auth_mode!r} for provider family {family_id}")
 
 
+# 教程注释：读取某个 variant 可选模型列表，供配置向导展示。
 def list_models_for_variant(
     family_id: str, auth_mode: str | None = None
 ) -> tuple[str, ...]:
     return resolve_provider_variant(family_id, auth_mode).models
 
 
+# 教程注释：把模型别名规范化为 canonical model id，避免配置里写入前缀别名。
 def normalize_model_id_for_variant(
     family_id: str, auth_mode: str | None, model_id: str
 ) -> str:

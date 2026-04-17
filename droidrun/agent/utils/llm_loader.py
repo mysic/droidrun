@@ -17,6 +17,8 @@ from droidrun.config_manager.config_manager import DroidConfig
 logger = logging.getLogger("droidrun")
 
 
+
+# 教程注释：这个函数根据 reasoning 模式和是否需要 structured output，决定当前任务必须加载哪些模型配置。
 def _get_required_profiles(
     config: DroidConfig, output_model: Type[BaseModel] | None = None
 ) -> List[str]:
@@ -108,6 +110,7 @@ def validate_llm_profiles(
     return required_profiles
 
 
+# 教程注释：load_agent_llms 是 Agent 侧最重要的装载入口，会决定该为哪些角色创建 LLM 实例。
 def load_agent_llms(
     config: DroidConfig,
     custom_provider: str | None = None,
@@ -203,6 +206,7 @@ def load_agent_llms(
     return llms
 
 
+# 教程注释：这个函数允许用户只手工提供一部分 LLM，剩余缺失角色再从配置里自动补齐。
 def merge_llms_with_config(
     config: DroidConfig,
     llms: dict[str, LLM],

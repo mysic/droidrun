@@ -10,6 +10,7 @@ _NEW_SYSTEM_PROMPT = "config/prompts/codeact/tools_system.jinja2"
 _NEW_USER_PROMPT = "config/prompts/codeact/tools_user.jinja2"
 
 
+# 教程注释：这个迁移负责把旧版 codeact 配置重命名到新版 fast_agent 结构上。
 def migrate(config: Dict[str, Any]) -> Dict[str, Any]:
     """Rename agent.codeact -> agent.fast_agent and llm_profiles.codeact -> fast_agent."""
     agent = config.get("agent", {})

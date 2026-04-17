@@ -9,6 +9,7 @@ from pathlib import Path
 CURRENT_VERSION = 5
 
 
+# 教程注释：这里会自动发现所有版本迁移模块，避免手工维护迁移列表。
 def get_migrations() -> List:
     """Discover and load all migration modules."""
     migrations = []
@@ -23,6 +24,7 @@ def get_migrations() -> List:
     return sorted(migrations, key=lambda m: m.VERSION)
 
 
+# 教程注释：migrate 会按版本顺序执行所有待运行迁移，把旧配置升级到当前版本。
 def migrate(config: Dict[str, Any]) -> Dict[str, Any]:
     """Run all pending migrations on config."""
     version = config.get("_version", 0)

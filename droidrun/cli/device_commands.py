@@ -51,6 +51,8 @@ def device_options(f):
     return f
 
 
+
+# 教程注释：_create_driver 是设备直连命令的核心入口，会根据参数和配置选择 Android/iOS driver 并完成连接准备。
 async def _create_driver(
     device: Optional[str],
     config_path: Optional[str],
@@ -110,6 +112,7 @@ async def _teardown_android(driver):
 # ---------------------------------------------------------------------------
 
 
+# 教程注释：device_cli 命令组提供“绕过 Agent 直接操作设备”的一组调试/运维指令。
 @click.group()
 def device_cli():
     """Direct device actions (screenshot, tap, swipe, etc.)."""
@@ -139,6 +142,7 @@ async def screenshot(device, config_path, tcp, ios):
         await _teardown_android(driver)
 
 
+# 教程注释：ui 命令会抓取并格式化当前无障碍树，便于人工查看索引和 bounds。
 @device_cli.command()
 @device_options
 @coro

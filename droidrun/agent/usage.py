@@ -9,6 +9,8 @@ from llama_index.core.llms import LLM, ChatResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger("droidrun")
+
+# 教程注释：SUPPORTED_PROVIDERS 声明了当前 token 统计逻辑可识别的 provider 类型。
 SUPPORTED_PROVIDERS = [
     "Gemini",
     "GoogleGenAI",
@@ -26,6 +28,7 @@ SUPPORTED_PROVIDERS = [
 ]
 
 
+# 教程注释：UsageResult 是统一用量结构，屏蔽不同厂商字段差异。
 class UsageResult(BaseModel):
     request_tokens: int
     response_tokens: int
@@ -33,6 +36,7 @@ class UsageResult(BaseModel):
     requests: int
 
 
+# 教程注释：_usage_field 做兼容读取（dict 或对象属性）并统一转 int。
 def _usage_field(usage: Any, *names: str) -> int:
     for name in names:
         if isinstance(usage, dict) and name in usage:
@@ -51,6 +55,7 @@ def _usage_field(usage: Any, *names: str) -> int:
     return 0
 
 
+# 教程注释：按 provider 分支把原始响应映射为统一 UsageResult。
 def get_usage_from_response(provider: str, chat_rsp: ChatResponse) -> UsageResult:
     rsp = chat_rsp.raw
     if not rsp:
@@ -125,6 +130,7 @@ def get_usage_from_response(provider: str, chat_rsp: ChatResponse) -> UsageResul
     raise ValueError(f"Unsupported provider: {provider}")
 
 
+# 教程注释：TokenCountingHandler 作为 LlamaIndex callback，在事件结束时累加 token 统计。
 class TokenCountingHandler(BaseCallbackHandler):
     """Token counting handler for LLamaIndex LLM calls."""
 
@@ -203,6 +209,7 @@ class TokenCountingHandler(BaseCallbackHandler):
         pass
 
 
+# 教程注释：llm_callback 提供临时挂载/移除回调的上下文管理器。
 @contextlib.contextmanager
 def llm_callback(llm: LLM, *args: List[BaseCallbackHandler]):
     for arg in args:
@@ -212,6 +219,7 @@ def llm_callback(llm: LLM, *args: List[BaseCallbackHandler]):
         llm.callback_manager.remove_handler(arg)
 
 
+# 教程注释：create_tracker 仅创建 tracker，不自动注册到 callback manager。
 def create_tracker(llm: LLM) -> TokenCountingHandler:
     provider = llm.__class__.__name__
     if provider not in SUPPORTED_PROVIDERS:
@@ -220,6 +228,7 @@ def create_tracker(llm: LLM) -> TokenCountingHandler:
     return TokenCountingHandler(provider)
 
 
+# 教程注释：track_usage 会创建并注册 tracker，适合全程累计统计。
 def track_usage(llm: LLM) -> TokenCountingHandler:
     """Track token usage for an LLM instance across all requests.
 

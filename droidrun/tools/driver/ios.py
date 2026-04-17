@@ -53,6 +53,7 @@ IOS_STATE_HTTP_TIMEOUT_SECONDS = 6.0
 
 def validate_ios_portal_url(url: str) -> str:
     """Validate and normalize an iOS portal base URL."""
+    # 教程注释：这里先做 URL 规范化和协议校验，避免后续请求阶段才暴露配置错误。
     normalized = url.rstrip("/")
     parsed = urlparse(normalized)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -79,6 +80,7 @@ async def discover_ios_portal(
     Raises:
         ConnectionError: If no portal is found in the scan range.
     """
+    # 教程注释：先探测默认端口再并发扫描邻近端口，兼顾速度和容错。
 
     async def _probe(client: httpx.AsyncClient, port: int) -> Optional[str]:
         url = f"http://{host}:{port}"
@@ -157,6 +159,7 @@ class IOSDriver(DeviceDriver):
 
     # -- lifecycle -----------------------------------------------------------
 
+    # 教程注释：connect 通过 /device/date 做健康探针，确认 iOS Portal API 通道可用。
     async def connect(self) -> None:
         self._client = httpx.AsyncClient(base_url=self.url, timeout=30.0)
         try:
@@ -258,6 +261,7 @@ class IOSDriver(DeviceDriver):
         ``device_context`` keys — matching the format expected by
         ``fetch_state_with_retry()``.
         """
+        # 教程注释：iOS 也返回统一结构（a11y_tree/phone_state/device_context），以复用上层状态处理链路。
         resp = await self._client.get(
             "/state",
             params={"timeout": str(IOS_STATE_TIMEOUT_SECONDS)},

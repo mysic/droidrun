@@ -18,6 +18,7 @@ COLORS = frozenset(
 )
 
 
+# 教程注释：configure_logging 统一替换 droidrun logger 的 handler，并关闭向上传播。
 def configure_logging(debug: bool, handler: logging.Handler) -> None:
     """Replace all handlers on the ``droidrun`` logger."""
     logger = logging.getLogger("droidrun")
@@ -27,6 +28,7 @@ def configure_logging(debug: bool, handler: logging.Handler) -> None:
     logger.propagate = False
 
 
+# 教程注释：CLILogHandler 面向终端即时输出，支持 stream 和颜色扩展字段。
 class CLILogHandler(logging.Handler):
     """Rich-colored line output for CLI and SDK use."""
 
@@ -54,6 +56,7 @@ class CLILogHandler(logging.Handler):
             self.handleError(record)
 
 
+# 教程注释：TUILogHandler 把日志缓存成结构化记录，便于 TUI 分批渲染。
 class TUILogHandler(logging.Handler):
     """Captures log records for TUI rendering.
 

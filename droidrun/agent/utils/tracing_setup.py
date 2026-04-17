@@ -24,6 +24,7 @@ _tracing_provider: Optional[str] = None
 _user_id: str = "anonymous"
 
 
+# 教程注释：setup_tracing 是 tracing 子系统总入口，会根据配置选择 Phoenix 或 Langfuse，并避免重复初始化。
 def setup_tracing(
     tracing_config: TracingConfig, agent: Optional[object] = None
 ) -> None:
@@ -54,6 +55,7 @@ def setup_tracing(
             set_current_agent(agent)
         return
 
+    # 教程注释：按 provider 分支初始化 tracing 后端，并把初始化状态缓存为单例级别。
     if provider == "phoenix":
         if _setup_phoenix_tracing():
             _tracing_initialized = True
@@ -83,6 +85,7 @@ def _check_phoenix_reachable(endpoint: str, timeout: float = 3.0) -> bool:
         return False
 
 
+# 教程注释：这个分支负责初始化 Phoenix，把 LlamaIndex 的 tracing 接到 Phoenix 后端。
 def _setup_phoenix_tracing() -> bool:
     """Set up Arize Phoenix tracing. Returns True if successful."""
     try:
@@ -110,6 +113,7 @@ def _setup_phoenix_tracing() -> bool:
     return True
 
 
+# 教程注释：这个分支负责初始化 Langfuse，并附加自定义 span processor 处理图片和 Agent 上下文。
 def _setup_langfuse_tracing(
     tracing_config: TracingConfig, agent: Optional[object] = None
 ) -> None:
@@ -214,6 +218,7 @@ def _setup_langfuse_tracing(
         )
 
 
+# 教程注释：这里把 session_id 和 user_id 写入 tracing 上下文，让后续 span 自动带上会话信息。
 def apply_session_context() -> None:
     """Apply session context for tracing. Only active when Langfuse tracing is enabled."""
     if not _tracing_initialized or _tracing_provider != "langfuse":
@@ -228,6 +233,7 @@ def apply_session_context() -> None:
     attach(ctx)
 
 
+# 教程注释：这个函数会把截图作为 tracing span 附件补充进去，方便在 Langfuse 中回放关键执行现场。
 def record_langfuse_screenshot(
     screenshot: bytes,
     mime_type: str = "image/png",

@@ -14,6 +14,8 @@ logger = logging.getLogger("droidrun")
 # ============================================================================
 
 
+
+# 教程注释：这个函数把文本路径、PIL 图片或原始 bytes 统一转换成图片字节，方便后续组装 ImageBlock。
 def _ensure_image_bytes(image_source: Union[str, Path, Image.Image, bytes]) -> bytes:
     """Convert image to bytes."""
     if isinstance(image_source, bytes):
@@ -30,6 +32,7 @@ def _ensure_image_bytes(image_source: Union[str, Path, Image.Image, bytes]) -> b
     return buffer.getvalue()
 
 
+# 教程注释：to_chat_messages 把普通字典消息翻译成 LlamaIndex 的 ChatMessage，是发送给模型前的统一适配步骤。
 def to_chat_messages(messages: list[dict]) -> list[ChatMessage]:
     """
     Convert dict messages to ChatMessage list.
@@ -74,6 +77,7 @@ def filter_empty_messages(messages: list[ChatMessage]) -> list[ChatMessage]:
     return [msg for msg in messages if has_content(msg)]
 
 
+# 教程注释：limit_history 用来裁剪历史消息长度，避免上下文无限膨胀，同时可选择保留第一条关键消息。
 def limit_history(
     messages: list[ChatMessage], max_messages: int, preserve_first: bool = True
 ) -> list[ChatMessage]:

@@ -12,6 +12,7 @@ from droidrun.credential_manager.credential_manager import (
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：FileCredentialManager 是默认实现，负责把内存 dict、CredentialsConfig 或 YAML 文件统一转换成可查询的 secrets 映射。
 class FileCredentialManager(CredentialManager):
     """
     Credential manager that supports both dict and YAML file sources.
@@ -32,6 +33,7 @@ class FileCredentialManager(CredentialManager):
         else:
             logger.debug(f"✅ Loaded {len(self.secrets)} secrets from in-memory dict")
 
+    # 教程注释：_load 是总分发入口，用输入类型决定走哪条加载路径，从而屏蔽不同来源的差异。
     def _load(self, credentials: Any) -> Dict[str, str]:
         """Load credentials from dict or file."""
         from droidrun.config_manager.config_manager import CredentialsConfig
@@ -56,6 +58,7 @@ class FileCredentialManager(CredentialManager):
         logger.warning(f"Unknown credentials type: {type(credentials)}")
         return {}
 
+    # 教程注释：dict 模式适合测试或嵌入式场景，逻辑只保留“非空字符串”类型的键值。
     def _load_from_dict(self, credentials_dict: dict) -> Dict[str, str]:
         """Load credentials from in-memory dict."""
         secrets = {}
@@ -68,6 +71,7 @@ class FileCredentialManager(CredentialManager):
                 )
         return secrets
 
+    # 教程注释：文件模式支持更丰富的 YAML 结构，既可以写简单键值，也可以为每个 secret 单独声明 enabled 开关。
     def _load_from_file(self, file_path: str) -> Dict[str, str]:
         """
         Load credentials from YAML file.
@@ -109,6 +113,7 @@ class FileCredentialManager(CredentialManager):
 
         return secrets
 
+    # 教程注释：resolve_key 是实际取密钥值的入口，不存在时会抛出带可用键列表的错误，方便定位配置引用问题。
     async def resolve_key(self, key: str) -> str:
         """Get secret value by key."""
         logger.debug(f"🔑 Accessing secret: '{key}'")
@@ -121,6 +126,7 @@ class FileCredentialManager(CredentialManager):
 
         return self.secrets[key]
 
+    # 教程注释：get_keys 暴露当前已加载成功的密钥名集合，让上层只依赖抽象接口即可完成发现与校验。
     async def get_keys(self) -> list[str]:
         """Get all available credential keys."""
         return list(self.secrets.keys())

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from droidrun.mcp.client import MCPClientManager
 
 
+# 教程注释：这个函数把 MCP 的 JSON Schema 参数格式翻译成 Droidrun 自己的工具参数格式，便于统一注册。
 def schema_to_parameters(input_schema: dict) -> dict[str, dict[str, Any]]:
     """Convert JSON Schema properties to Droidrun parameters format.
 
@@ -37,6 +38,7 @@ def schema_to_parameters(input_schema: dict) -> dict[str, dict[str, Any]]:
 
 def mcp_to_droidrun_tools(mcp_manager: "MCPClientManager") -> dict[str, dict[str, Any]]:
     """Convert discovered MCP tools to Droidrun custom tool format."""
+    # 教程注释：转换后结果可直接并入 ToolRegistry，实现内置工具与 MCP 工具统一调用。
     custom_tools: dict[str, dict[str, Any]] = {}
 
     for tool_name, tool_info in mcp_manager.tools.items():
@@ -50,6 +52,8 @@ def mcp_to_droidrun_tools(mcp_manager: "MCPClientManager") -> dict[str, dict[str
     return custom_tools
 
 
+
+# 教程注释：这里为每个 MCP 工具包一层异步 wrapper，让上层 Agent 调用它时看起来像普通 Droidrun tool。
 def _create_tool_wrapper(tool_name: str, manager: "MCPClientManager"):
     """Create async wrapper function for an MCP tool."""
 

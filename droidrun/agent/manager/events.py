@@ -12,6 +12,7 @@ from llama_index.core.workflow import Event
 from droidrun.agent.usage import UsageResult
 
 
+# 教程注释：Manager 的事件描述“上下文准备好了”“模型回应回来了”“计划已经解析好了”这几个内部阶段。
 class ManagerContextEvent(Event):
     """Context prepared, ready for LLM call."""
 

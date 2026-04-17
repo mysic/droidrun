@@ -412,6 +412,8 @@ async def check_content_provider(device: AdbDevice, debug: bool) -> CheckResult:
 async def check_tcp(device: AdbDevice, debug: bool) -> CheckResult:
     """Check TCP mode with explicit steps: enable server, forward port, auth, ping."""
 
+    # 教程注释：按“启服务 -> 取 token -> 建转发 -> 发 ping”分步检查，便于快速定位 TCP 故障环节。
+
     steps = []
 
     # Step 1: Enable socket server via content provider
@@ -640,6 +642,7 @@ async def run_doctor(
     debug: bool = False,
 ) -> None:
     """Run all doctor checks and auto-fix where possible."""
+    # 教程注释：run_doctor 是健康检查总编排，发现问题后会尝试自动修复再复检。
     debug = debug or False
 
     console.print("\n[bold]Droidrun Doctor[/]\n")

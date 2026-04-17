@@ -32,6 +32,7 @@ _MAX_RETRIES = 7
 _RECOVERY_AFTER_ATTEMPT = 5
 
 
+# 教程注释：这个函数负责可靠地抓取设备状态，遇到临时失败时会按计划重试，并在必要时尝试恢复 Portal。
 async def fetch_state_with_retry(
     fetch: Callable[[], Awaitable[Dict[str, Any]]],
     recovery: Optional[Callable[[], Awaitable[None]]] = None,
@@ -134,6 +135,8 @@ class StateProvider:
         raise NotImplementedError
 
 
+
+# 教程注释：AndroidStateProvider 把“原始 UI 树”加工成 Agent 能消费的 UIState，是 Android 平台上的状态翻译器。
 class AndroidStateProvider(StateProvider):
     """Fetches state from an Android device via ``driver.get_ui_tree()``.
 
@@ -161,6 +164,7 @@ class AndroidStateProvider(StateProvider):
 
     async def _recover_portal(self) -> None:
         """Restart Portal's accessibility service and TCP socket server."""
+        # 教程注释：这是状态抓取失败后的自愈钩子，尝试重启无障碍与 TCP 通道再继续重试。
         from droidrun.tools.driver.android import AndroidDriver
 
         if not isinstance(self.driver, AndroidDriver):
@@ -202,6 +206,7 @@ class AndroidStateProvider(StateProvider):
 
         await asyncio.sleep(1.5)
 
+    # 教程注释：get_state 是状态获取主流程，会抓取原始数据、过滤格式化后返回结构化 UIState。
     async def get_state(self) -> UIState:
         combined_data = await fetch_state_with_retry(
             fetch=self.driver.get_ui_tree,
@@ -215,6 +220,7 @@ class AndroidStateProvider(StateProvider):
 
         filtered = self.tree_filter.filter(combined_data["a11y_tree"], device_context)
 
+        # 教程注释：格式化前注入屏幕尺寸，保证坐标归一化与元素索引计算一致。
         self.tree_formatter.screen_width = screen_width
         self.tree_formatter.screen_height = screen_height
         self.tree_formatter.use_normalized = self.use_normalized

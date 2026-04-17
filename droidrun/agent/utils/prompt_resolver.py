@@ -29,6 +29,7 @@ class PromptResolver:
                            Keys: "fast_agent_system", "fast_agent_user", "manager_system",
                                  "executor_system"
         """
+        # 教程注释：custom_prompts 允许调用方在运行时覆写提示词，不必修改磁盘模板文件。
         self.custom_prompts = custom_prompts or {}
 
     def get_prompt(
@@ -44,6 +45,7 @@ class PromptResolver:
         Returns:
             Jinja2 template string if found in custom_prompts, else None
         """
+        # 教程注释：这里仅返回内存中的自定义模板，文件回退由上层 PromptLoader 处理。
         return self.custom_prompts.get(prompt_key)
 
     def has_custom_prompt(self, prompt_key: str) -> bool:

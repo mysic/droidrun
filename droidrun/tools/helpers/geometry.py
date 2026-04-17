@@ -5,6 +5,7 @@ from typing import List, Tuple, Optional
 Bounds = Tuple[int, int, int, int]
 
 
+# 教程注释：用于快速判断目标元素与遮挡元素是否重叠，是点击可达性分析基础。
 def rects_overlap(a: Bounds, b: Bounds) -> bool:
     """Check if two rectangles overlap."""
     return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
@@ -16,6 +17,7 @@ def find_clear_point(
     depth: int = 0,
 ) -> Optional[Tuple[int, int]]:
     """Find a clear point in bounds using quadrant subdivision."""
+    # 教程注释：通过递归四分搜索寻找无遮挡点，避免始终点击中心导致误触。
     left, top, right, bottom = bounds
     cx, cy = (left + right) // 2, (top + bottom) // 2
 

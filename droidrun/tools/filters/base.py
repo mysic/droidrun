@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 
 
+# 教程注释：TreeFilter 是过滤器抽象接口，具体策略类都要实现 filter 和 get_name。
 class TreeFilter(ABC):
     """Interface for filtering accessibility trees."""
 

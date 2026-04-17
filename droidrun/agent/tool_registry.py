@@ -29,6 +29,8 @@ class ToolEntry:
     deps: Optional[Set[str]] = None
 
 
+
+# 教程注释：ToolRegistry 维护“工具名 -> 可执行函数”的映射，是模型动作和真实程序动作之间的总分发器。
 class ToolRegistry:
     """Central registry of all agent-callable tools."""
 
@@ -51,6 +53,7 @@ class ToolRegistry:
 
     def register_from_dict(self, tools_dict: Dict[str, Any]) -> None:
         """Register tools from the existing ``{name: {parameters, description, function}}`` format."""
+        # 教程注释：兼容旧字典协议，便于把历史工具定义平滑迁移到 ToolRegistry。
         for name, spec in tools_dict.items():
             deps = spec.get("deps")
             if deps is not None:
@@ -73,6 +76,7 @@ class ToolRegistry:
 
         Tools with ``deps=None`` (custom tools, MCP tools, etc.) are kept.
         """
+        # 教程注释：通过能力集裁剪工具，让模型只看到当前设备真实可执行的动作。
         to_remove = [
             name
             for name, entry in self.tools.items()
@@ -92,6 +96,7 @@ class ToolRegistry:
                      ExecutorAgent to hide flow-control tools (remember,
                      complete) that only FastAgent should see.
         """
+        # 教程注释：返回 prompt 所需的简化签名，隔离执行函数实现细节。
         exclude = exclude or set()
         return {
             name: {"parameters": entry.params, "description": entry.description}
@@ -101,6 +106,7 @@ class ToolRegistry:
 
     # -- execution -----------------------------------------------------------
 
+    # 教程注释：execute 会把模型给出的工具名和参数转成真实函数调用，并统一整理返回结果格式。
     async def execute(
         self,
         name: str,
@@ -193,6 +199,7 @@ class ToolRegistry:
 
     def get_tool_descriptions_xml(self, exclude: Optional[Set[str]] = None) -> str:
         """Build XML ``<functions>`` block for FastAgent system prompt."""
+        # 教程注释：FastAgent 使用 XML 函数描述，便于模型以结构化方式产出调用。
         exclude = exclude or set()
         lines = ["<functions>"]
         for name, entry in self.tools.items():
@@ -204,6 +211,7 @@ class ToolRegistry:
 
     def get_tool_descriptions_text(self, exclude: Optional[Set[str]] = None) -> str:
         """Build text tool descriptions for executor prompts."""
+        # 教程注释：Executor 使用文本签名说明，降低提示词冗长度并保持可读性。
         exclude = exclude or set()
         descriptions = []
         for name, entry in self.tools.items():

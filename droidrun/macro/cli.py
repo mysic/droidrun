@@ -40,6 +40,8 @@ def configure_logging(debug: bool = False):
     return logger
 
 
+
+# 教程注释：这个命令组提供 macro 的终端入口，主要包含 replay 和 list 两类操作。
 @click.group()
 def macro_cli():
     """Replay recorded automation sequences."""
@@ -62,6 +64,7 @@ def macro_cli():
 @click.option(
     "--dry-run", is_flag=True, help="Show actions without executing", default=False
 )
+# 教程注释：replay 命令负责从文件/目录加载宏并触发回放，支持设备选择、步数控制和 dry-run。
 def replay(
     path: str,
     device: Optional[str],
@@ -123,6 +126,7 @@ async def _replay_async(
     logger: logging.Logger,
 ):
     """Async function to handle macro replay."""
+    # 教程注释：统一处理路径解析、宏加载、执行与 dry-run 展示，是 replay 命令的异步主流程。
     try:
         # Resolve path (checks working dir, then package dir)
         resolved_path = PathResolver.resolve(path, must_exist=True)

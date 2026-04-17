@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import platformdirs
+import platformdirs  # type: ignore[import-not-found]
 import yaml
 
 from .config_manager import DroidConfig
@@ -19,6 +19,8 @@ class OutdatedConfigError(Exception):
     pass
 
 
+
+# 教程注释：ConfigLoader 统一处理配置文件的查找、首次初始化和版本迁移，是配置系统的入口门面。
 class ConfigLoader:
     """Unified config loading with user config support."""
 
@@ -33,6 +35,7 @@ class ConfigLoader:
     def get_user_config_path(cls) -> Path:
         return cls.get_user_config_dir() / cls.CONFIG_FILE
 
+    # 教程注释：load 按“显式参数 -> 环境变量 -> 用户目录 -> 默认初始化”的顺序决定最终使用哪份配置。
     @classmethod
     def load(cls, config_path: Optional[str] = None) -> DroidConfig:
         """
@@ -59,6 +62,7 @@ class ConfigLoader:
     @classmethod
     def _load_user_config(cls, user_config_path: Path) -> DroidConfig:
         """Load user config and run migrations."""
+        # 教程注释：加载后会先执行迁移，再在版本升级时自动回写新结构，减少手工维护成本。
         with open(user_config_path, "r", encoding="utf-8") as f:
             user_dict = yaml.safe_load(f) or {}
 

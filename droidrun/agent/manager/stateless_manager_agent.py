@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：StatelessManagerAgent 是“无状态规划器”，每轮重新拼完整上下文，而不是依赖长期 message_history 递增对话。
 class StatelessManagerAgent(Workflow):
     def __init__(
         self,
@@ -67,6 +68,7 @@ class StatelessManagerAgent(Workflow):
         self.prompt_resolver = prompt_resolver or PromptResolver()
         self.tracing_config = tracing_config
 
+    # 教程注释：这里只回看最近几次动作历史，把长历史压缩成结构化摘要，避免 prompt 无限膨胀。
     def _build_action_history(self) -> list[dict]:
         if not self.shared_state.action_history:
             return []
@@ -88,6 +90,7 @@ class StatelessManagerAgent(Workflow):
             )
         ]
 
+    # 教程注释：无状态模式每轮都即时渲染一份 manager prompt，把当前状态和压缩历史重新装配进去。
     async def _build_prompt(self) -> str:
         variables = {
             "instruction": self.shared_state.instruction,
@@ -110,6 +113,7 @@ class StatelessManagerAgent(Workflow):
             variables,
         )
 
+    # 教程注释：这里用与有状态 Manager 相同的解析规则做响应校验，但重试消息只基于当前轮上下文重建。
     async def _validate_and_retry(
         self, messages: list[dict], initial_response: str
     ) -> str:
@@ -169,6 +173,7 @@ class StatelessManagerAgent(Workflow):
 
         return output
 
+    # 教程注释：prepare_context 负责抓取这一轮最新截图和 UI，再把 shared_state 更新成“上一帧/当前帧”双状态。
     @step
     async def prepare_context(
         self, ctx: Context, ev: StartEvent
@@ -219,6 +224,7 @@ class StatelessManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：无状态模式调用 LLM 时只发送当前轮 prompt，不继承完整多轮消息历史。
     @step
     async def get_response(
         self, ctx: Context, ev: ManagerContextEvent
@@ -255,6 +261,7 @@ class StatelessManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：解析结果后只回写共享状态中的关键规划字段，不维护 assistant/user 对话历史。
     @step
     async def process_response(
         self, ctx: Context, ev: ManagerResponseEvent
@@ -292,6 +299,7 @@ class StatelessManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：最终仍返回与有状态 Manager 一致的 result 结构，让上层 DroidAgent 不必区分消费协议。
     @step
     async def finalize(self, ctx: Context, ev: ManagerPlanDetailsEvent) -> StopEvent:
         return StopEvent(

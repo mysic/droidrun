@@ -23,6 +23,7 @@ logger = logging.getLogger("droidrun")
 # ---------------------------------------------------------------------------
 
 
+# 教程注释：click 是最基础的 UI 动作之一，它先通过 UIState 找到元素坐标，再交给 driver 真正点击设备。
 async def click(index: int, *, ctx: "ActionContext") -> ActionResult:
     """Click the element with the given index."""
     try:
@@ -136,6 +137,8 @@ async def system_button(button: str, *, ctx: "ActionContext") -> ActionResult:
         )
 
 
+
+# 教程注释：swipe 展示了动作系统里常见的“参数校验 -> 坐标转换 -> 设备执行 -> 统一返回”的标准模式。
 async def swipe(
     coordinate: List[int],
     coordinate2: List[int],
@@ -176,6 +179,7 @@ async def open_app(text: str, *, ctx: "ActionContext") -> ActionResult:
             summary="Failed: app_opener_llm not configured.",
         )
 
+    # 教程注释：动作层不直接做模糊匹配，而是委托给专用 AppStarter workflow，保持主动作接口稳定。
     workflow = AppStarter(
         driver=ctx.driver,
         llm=ctx.app_opener_llm,
@@ -187,6 +191,7 @@ async def open_app(text: str, *, ctx: "ActionContext") -> ActionResult:
     result = await workflow.run(app_description=text)
     await asyncio.sleep(1)
 
+    # 教程注释：这里把 workflow 的字符串结果再次归一为 ActionResult，方便 ToolRegistry 统一处理。
     if isinstance(result, str) and "could not open app" in result.lower():
         return ActionResult(success=False, summary=result)
     return ActionResult(success=True, summary=str(result))
@@ -225,6 +230,7 @@ async def wait(duration: float = 1.0, *, ctx: "ActionContext") -> ActionResult:
 # ---------------------------------------------------------------------------
 
 
+# 教程注释：remember 不操作设备，而是把信息写进共享状态，供后续步骤继续使用。
 async def remember(information: str, *, ctx: "ActionContext") -> ActionResult:
     """Remember important information for later use."""
     result = await ctx.shared_state.remember(information)

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Tuple
 
 
+# 教程注释：TreeFormatter 规定“格式化器最终必须返回什么”，保证上层总能拿到统一的 UIState 原料。
 class TreeFormatter(ABC):
     """Interface for formatting filtered trees."""
 

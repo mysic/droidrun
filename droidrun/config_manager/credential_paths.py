@@ -9,6 +9,7 @@ USER_CONFIG_DIR = Path(platformdirs.user_config_dir(APP_NAME))
 OAUTH_CREDENTIAL_DIR = USER_CONFIG_DIR / "credentials"
 
 # Single credential file for all providers (OAuth tokens + API keys).
+# 教程注释：统一凭据文件路径可以简化多 provider 管理，避免每个 provider 各自维护独立凭据文件。
 AUTH_PROFILES_PATH = OAUTH_CREDENTIAL_DIR / "auth-profiles.json"
 
 # Legacy aliases — all point to the same file now.

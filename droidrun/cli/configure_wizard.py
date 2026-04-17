@@ -29,6 +29,7 @@ _BACK = "__back__"
 _ALL_CONFIG_ROLES = ("manager", "executor", "fast_agent", "app_opener", "structured_output")
 
 
+# 教程注释：ConfigureWizardCallbacks 把外部 OAuth 动作注入向导，便于在流程内按 provider 调用对应登录逻辑。
 @dataclass
 class ConfigureWizardCallbacks:
     run_openai_oauth_login: Callable[..., None]
@@ -522,6 +523,7 @@ def _configure_provider_model(
         return True
 
 
+# 教程注释：run_configure_wizard 是配置向导主入口，负责驱动 provider/model 选择、高级选项和最终保存。
 def run_configure_wizard(
     console: Console,
     callbacks: ConfigureWizardCallbacks,

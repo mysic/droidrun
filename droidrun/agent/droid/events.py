@@ -11,6 +11,7 @@ from llama_index.core.workflow import Event, StopEvent
 from pydantic import BaseModel
 
 
+# 教程注释：这些事件是顶层协调器和子 Agent 之间的“流程消息”，用来驱动 planning、execution 和最终收尾。
 class FastAgentExecuteEvent(Event):
     instruction: str
 
@@ -32,6 +33,8 @@ class ManagerInputEvent(Event):
     pass
 
 
+
+# 教程注释：ManagerPlanEvent 是 Manager 回给 DroidAgent 的协调结果，顶层会据此决定是否进入 Executor 或直接结束。
 class ManagerPlanEvent(Event):
     """
     Coordination event from ManagerAgent to DroidAgent.
@@ -67,12 +70,14 @@ class ExecutorResultEvent(Event):
 # ============================================================================
 
 
+# 教程注释：AppliedEvent 表示一批外部插队消息已被某个消费者（manager/fast_agent）真正吸收到上下文中。
 class ExternalUserMessageAppliedEvent(Event):
     message_ids: List[str]
     consumer: str
     step_number: int
 
 
+# 教程注释：DroppedEvent 表示消息还没来得及消费就被丢弃，常见于达到最大步数或任务结束边界。
 class ExternalUserMessageDroppedEvent(Event):
     message_ids: List[str]
     reason: str
@@ -91,6 +96,8 @@ class FinalizeEvent(Event):
     reason: str
 
 
+
+# 教程注释：ResultEvent 是整个任务最终返回给调用方的结果对象，相当于顶层工作流的统一出口。
 class ResultEvent(StopEvent):
     """
     Final result from DroidAgent.

@@ -16,6 +16,8 @@ from droidrun.tools.ui.state import UIState
 class StealthUIState(UIState):
     """UIState variant that randomizes tap coordinates within element bounds."""
 
+    # 教程注释：通过安全区随机点替代固定中心点，降低自动化点击轨迹的可识别性。
+
     def get_element_coords(self, index: int) -> Tuple[int, int]:
         """Return a randomized point within the safe zone of element *index*.
 
@@ -80,6 +82,7 @@ class StealthUIState(UIState):
         Uses the parent overlap-avoidance logic, then adds jitter within
         a 20% radius of the element dimensions.
         """
+        # 教程注释：先复用父类“避遮挡”结果，再叠加小幅抖动，兼顾可达性与拟人化。
         # Get the overlap-free center from parent
         cx, cy = super().get_clear_point(index)
 

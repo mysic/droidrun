@@ -14,6 +14,7 @@ from droidrun.config_manager.path_resolver import PathResolver
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：本地 provider 通过 app_cards.json 建立映射并缓存内容，适合离线或本地优先场景。
 class LocalAppCardProvider(AppCardProvider):
     """Load app cards from local filesystem with in-memory caching."""
 
@@ -25,6 +26,7 @@ class LocalAppCardProvider(AppCardProvider):
             app_cards_dir: Directory containing app_cards.json and markdown files
         """
         # Resolve app_cards.json path once
+        # 教程注释：初始化阶段预加载映射，后续查询可直接 O(1) 命中 package -> 文件路径。
         mapping_path = PathResolver.resolve(f"{app_cards_dir}/app_cards.json")
         self.app_cards_dir = mapping_path.parent
 
@@ -44,6 +46,7 @@ class LocalAppCardProvider(AppCardProvider):
         # Content cache: (package_name, instruction) -> content
         self._content_cache: Dict[tuple[str, str], str] = {}
 
+    # 教程注释：load_app_card 会先查缓存，再按 package 找映射文件并读取内容，失败时返回空字符串而非抛错。
     async def load_app_card(self, package_name: str, instruction: str = "") -> str:
         """
         Load app card for a package name from local files.

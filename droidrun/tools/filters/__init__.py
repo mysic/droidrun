@@ -5,6 +5,7 @@ from .concise_filter import ConciseFilter
 from .detailed_filter import DetailedFilter
 
 
+# 教程注释：工厂函数让上层通过名字切换过滤策略，而不必直接依赖具体过滤器类。
 def get_filter(name: str, **kwargs) -> TreeFilter:
     """Factory to get filter by name."""
     filters = {

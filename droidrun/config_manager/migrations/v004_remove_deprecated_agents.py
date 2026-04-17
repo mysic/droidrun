@@ -10,6 +10,7 @@ _NEW_SYSTEM_PROMPT = "config/prompts/fast_agent/system.jinja2"
 _NEW_USER_PROMPT = "config/prompts/fast_agent/user.jinja2"
 
 
+# 教程注释：这个迁移清理废弃 agent 配置，并把旧 Prompt 路径更新到新的 fast_agent 目录。
 def migrate(config: Dict[str, Any]) -> Dict[str, Any]:
     """Strip removed agent configs and update prompt paths."""
     agent = config.get("agent", {})

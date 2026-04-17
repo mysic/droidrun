@@ -27,6 +27,7 @@ class Trajectory:
             goal: The goal/prompt that this trajectory is trying to achieve
             base_path: Directory for saving (absolute or relative to cwd)
         """
+        # 教程注释：Trajectory 把事件、截图、宏动作聚合到同一目录结构，便于回放与排障复盘。
         self.events: List[Event] = []
         self.screenshot_count: int = 0
         self.screenshot_queue: List[bytes] = []
@@ -65,6 +66,7 @@ class Trajectory:
         self.goal = goal
 
     def get_trajectory(self) -> List[Dict[str, Any]]:
+        # 教程注释：这里把事件对象转换成可序列化字典，供 trajectory.json 持久化。
         # Save main trajectory events
         serializable_events = []
         for event in self.events:
@@ -295,6 +297,7 @@ def get_trajectory_statistics(
     Returns:
         Dictionary with statistics about the trajectory
     """
+    # 教程注释：统计函数用于快速判断计划/执行比例与失败分布，适合问题定位和性能分析。
 
     # Count different types of steps
     step_types = {}

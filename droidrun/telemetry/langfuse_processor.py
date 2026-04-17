@@ -54,6 +54,7 @@ _last_step_span_context: ContextVar[Optional[Context]] = ContextVar(
 )
 
 
+# 教程注释：这些辅助函数用 ContextVar 保存当前 Agent 和关键 span 上下文，适合并发环境下安全传递 tracing 信息。
 def set_current_agent(agent: "DroidAgent") -> None:
     _current_agent.set(agent)
 
@@ -101,6 +102,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
     - Message format transformation (blocks → content)
     """
 
+    # 教程注释：LangfuseSpanProcessor 在官方处理器上做了增强，增加图片上传、内容转换和并发上传控制。
     def __init__(
         self,
         *,
@@ -415,6 +417,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
 
         super().shutdown()
 
+    # 教程注释：on_start 会在关键运行 span 开始时注入 Agent 上下文，把配置、模式和阶段信息提前挂到 trace 上。
     def on_start(self, span: Span, parent_context: Optional[Context] = None) -> None:
         super().on_start(span, parent_context)
 
@@ -478,6 +481,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
             logger.error(f"Error injecting metadata in on_start: {e}")
 
     # Span processing
+    # 教程注释：on_end 是统一收口点，会按 span 类型改写输入输出、处理截图，并把 LlamaIndex 原始格式转成 Langfuse 更适合展示的结构。
     def on_end(self, span: ReadableSpan) -> None:
         if self._is_langfuse_span(span) and not self._is_langfuse_project_span(span):
             return
@@ -544,6 +548,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
         self._process_field(attrs, trace_id, "output")
 
     # Message transformation
+    # 教程注释：这个函数负责判断字段是普通字符串还是块结构消息，必要时触发后续 blocks -> content 转换。
     def _process_field(self, attrs: dict, trace_id: str, field: str) -> None:
         """Process input or output field - handle both JSON messages and plain strings."""
         field_key = f"{field}.value"
@@ -664,6 +669,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
         trace_id: str,
         field: str,
     ) -> list:
+        # 教程注释：这里把 LlamaIndex 的 text/image/tool_call block 逐个映射成 Langfuse content block，是消息可视化的核心转换层。
         """Convert LlamaIndex blocks to Langfuse content blocks."""
         content_blocks = []
 
@@ -696,6 +702,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
 
         return content_blocks
 
+    # 教程注释：截图 span 不直接作为普通文本输出，而是被重写成一条带图片内容的 Langfuse 消息，方便在界面中回放现场。
     def _process_screenshot_span(self, span: ReadableSpan) -> None:
         """Convert custom screenshot spans into Langfuse image content."""
         attrs = span._attributes or {}
@@ -736,6 +743,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
         trace_id: str,
         field: str,
     ) -> Optional[dict]:
+        # 教程注释：这个函数把 base64 图片改造成 Langfuse blob 引用，避免把大图直接塞进 span 文本字段。
         """Upload image to blob storage and return media reference."""
         if "image" in block and block["image"] is not None:
             image_base64 = block["image"]

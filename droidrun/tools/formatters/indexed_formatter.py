@@ -5,6 +5,7 @@ from .base import TreeFormatter
 from ..helpers.coordinate import bounds_to_normalized
 
 
+# 教程注释：IndexedFormatter 会给元素编号并拼接成文本，这是模型真正阅读到的界面描述格式。
 class IndexedFormatter(TreeFormatter):
     """Format tree in the standard Droidrun format."""
 
@@ -13,6 +14,7 @@ class IndexedFormatter(TreeFormatter):
         self.screen_height: Optional[int] = None
         self.use_normalized: bool = False
 
+    # 教程注释：format 会把过滤后的树压平、编号，再和 phone_state 一起拼成完整提示文本。
     def format(
         self, filtered_tree: Optional[Dict[str, Any]], phone_state: Dict[str, Any]
     ) -> Tuple[str, str, List[Dict[str, Any]], Dict[str, Any]]:
@@ -149,6 +151,7 @@ class IndexedFormatter(TreeFormatter):
 
         return "\n".join(formatted_lines)
 
+    # 教程注释：这个递归函数负责把树结构展开成线性列表，同时给每个节点分配稳定递增的索引。
     def _flatten_with_index(
         self, node: Dict[str, Any], counter: List[int]
     ) -> List[Dict[str, Any]]:
@@ -166,6 +169,7 @@ class IndexedFormatter(TreeFormatter):
 
     def _format_node(self, node: Dict[str, Any], index: int) -> Dict[str, Any]:
         """Format single node to Droidrun format."""
+        # 教程注释：节点会被压缩为统一字段集合，确保后续动作层只依赖稳定的最小信息集。
         bounds = node.get("boundsInScreen", {})
         bounds_str = f"{bounds.get('left', 0)},{bounds.get('top', 0)},{bounds.get('right', 0)},{bounds.get('bottom', 0)}"
 

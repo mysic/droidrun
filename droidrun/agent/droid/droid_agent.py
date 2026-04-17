@@ -92,6 +92,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：DroidAgent 是整个框架的总协调器，决定用哪种模式执行任务，并把工具、状态、驱动都串起来。
 class DroidAgent(Workflow):
     """
     A wrapper class that coordinates between agents to achieve a user's goal.
@@ -118,6 +119,7 @@ class DroidAgent(Workflow):
             )
             configure_logging(debug=debug, handler=handler)
 
+    # 教程注释：构造阶段会装配配置、LLM、共享状态、子 Agent 和工具上下文，是总协调器的初始化中心。
     def __init__(
         self,
         goal: str,
@@ -274,8 +276,10 @@ class DroidAgent(Workflow):
             self.executor_agent = None
         elif self.config.agent.reasoning:
             if self.config.agent.manager.stateless:
+                # 教程注释：开启 stateless 后，顶层会改用“每轮重建上下文”的规划器，适合控制历史体积或做更强可重复规划。
                 ManagerClass = StatelessManagerAgent
             else:
+                # 教程注释：默认使用有状态 ManagerAgent，它会持续积累 message_history 进行多轮规划。
                 ManagerClass = ManagerAgent
 
             # Pass None for tools-related params — wired up in start_handler
@@ -311,6 +315,7 @@ class DroidAgent(Workflow):
 
         logger.debug("✅ DroidAgent initialized successfully.")
 
+    # 教程注释：run 只是工作流启动入口，真正复杂的资源准备和分支决策在后面的 start_handler 里完成。
     def run(self, *args, **kwargs) -> Awaitable[ResultEvent] | WorkflowHandler:
         apply_session_context()
         handler = super().run(*args, **kwargs)  # type: ignore[assignment]
@@ -565,6 +570,7 @@ class DroidAgent(Workflow):
     # External user message injection
     # ========================================================================
 
+    # 教程注释：这个公开方法允许调用方在任务运行中追加新指令，实际只入队，不会立刻打断当前 step。
     def send_user_message(self, message: str) -> QueuedUserMessage:
         queued = self.shared_state.queue_user_message(message)
         logger.info(
@@ -667,6 +673,7 @@ class DroidAgent(Workflow):
     ) -> ManagerPlanEvent | FinalizeEvent:
         """Run Manager planning phase."""
         if self.shared_state.step_number >= self.config.agent.max_steps:
+            # 教程注释：如果 planning 已触顶，尚未消费的外部消息会显式标记为 dropped，而不是悄悄消失。
             logger.warning(f"⚠️ Reached maximum steps ({self.config.agent.max_steps})")
             pending = self.shared_state.drain_user_messages()
             if pending:
@@ -718,6 +725,7 @@ class DroidAgent(Workflow):
         """Process Manager output and decide next step."""
         # Check for answer-type termination
         if ev.answer.strip():
+            # 教程注释：若 Manager 想结束但队列里还有外部消息，顶层会强制回到 Manager 再规划一次，优先消费新指令。
             if self.shared_state.pending_user_messages:
                 logger.info(
                     "⏸️ Manager tried to finish but external messages pending, "
@@ -819,6 +827,7 @@ class DroidAgent(Workflow):
             logger.debug("🔄 Running structured output extraction...")
 
             try:
+                # 教程注释：主 Agent 在最终收尾阶段再触发 StructuredOutputAgent，避免中途步骤被 schema 约束干扰。
                 structured_agent = StructuredOutputAgent(
                     llm=self.structured_output_llm,
                     pydantic_model=self.output_model,
@@ -826,6 +835,7 @@ class DroidAgent(Workflow):
                     timeout=self.timeout,
                 )
 
+                # 教程注释：这里沿用嵌套 workflow 的事件流转发，保证 CLI/TUI 仍能看到内部提取过程。
                 handler = structured_agent.run()
 
                 async for nested_ev in handler.stream_events():

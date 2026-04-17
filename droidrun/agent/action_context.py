@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from droidrun.tools.ui.state import UIState
 
 
+# 教程注释：ActionContext 把执行动作时需要的依赖打包到一起，避免每个动作函数都传一长串参数。
 class ActionContext:
     """Everything an action function needs to interact with the device."""
 

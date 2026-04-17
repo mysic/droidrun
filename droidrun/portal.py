@@ -34,6 +34,7 @@ A11Y_SERVICE_NAME = (
 )
 
 
+# 教程注释：这里先查“框架版本”和“Portal APK 版本”的兼容关系，避免下载了不匹配的手机端组件。
 def get_version_mapping(debug: bool = False) -> dict | None:
     try:
         response = requests.get(VERSION_MAP_GIST_URL, timeout=10)
@@ -58,6 +59,7 @@ def _version_in_range(version: str, range_str: str) -> bool:
         return False
 
 
+# 教程注释：根据 SDK 版本解析“应安装的 Portal 版本”，找不到映射时再走 latest 回退。
 def get_compatible_portal_version(
     droidrun_version: str, debug: bool = False
 ) -> tuple[str | None, str, bool]:
@@ -140,6 +142,8 @@ def get_latest_release_assets(debug: bool = False):
     return assets
 
 
+
+# 教程注释：这个上下文管理器负责下载最新版 Portal APK，并在退出时自动删除临时文件。
 @contextlib.contextmanager
 def download_portal_apk(debug: bool = False):
     """
@@ -458,6 +462,7 @@ async def setup_portal(
         return False
 
 
+    # 教程注释：安装或启用后轮询 /state，等待 Portal 服务真正可用。
 async def _wait_for_portal_service(
     device: AdbDevice, timeout: float = 10.0, interval: float = 1.0
 ) -> None:
@@ -493,6 +498,7 @@ def _parse_portal_version(raw_output: str) -> str | None:
     return None
 
 
+# 教程注释：ensure_portal_ready 是健康检查总入口：并行检查安装/版本/a11y，并在异常时自动修复。
 async def ensure_portal_ready(
     device: AdbDevice,
     debug: bool = False,

@@ -23,6 +23,7 @@ from droidrun.agent.utils.actions import (
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：这个函数负责把系统内置动作注册成工具清单，供 Manager、Executor、FastAgent 在运行时调用。
 async def build_tool_registry(
     supported_buttons: set[str] | None = None,
     credential_manager=None,
@@ -229,6 +230,7 @@ async def build_tool_registry(
     # -- Credential tools (conditional) --------------------------------------
 
     if credential_manager is not None:
+        # 教程注释：只有检测到可用密钥时才暴露 type_secret，避免模型调用空能力。
         available_secrets = await credential_manager.get_keys()
         if available_secrets:
             logger.debug(

@@ -67,6 +67,7 @@ def load_env_keys() -> dict[str, str]:
     Returns:
         Dict mapping slot name (e.g. "google") to key value.
     """
+    # 教程注释：读取策略是“文件优先、环境变量兜底”，保证 CLI 写入的密钥可跨会话稳定生效。
     result: dict[str, str] = {}
     for slot, sources in load_env_key_sources().items():
         result[slot] = sources.saved or sources.shell
@@ -97,6 +98,7 @@ def save_env_keys(keys: dict[str, str]) -> None:
     Args:
         keys: Dict mapping slot name (e.g. "google") to key value.
     """
+    # 教程注释：这里使用临时文件 + 原子替换写入，避免进程中断时产生半写坏文件。
     AUTH_PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     existing: dict = {}

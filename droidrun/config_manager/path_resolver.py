@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Union
 
 
+# 教程注释：PathResolver 统一处理用户路径和包内资源路径，避免每个模块各自写一套查找逻辑。
 class PathResolver:
     """
     Unified path resolver for all Droidrun file operations.
@@ -29,6 +30,7 @@ class PathResolver:
         """
         return Path(__file__).resolve().parents[1]
 
+    # 教程注释：resolve 是路径解析主入口，会根据“读取/创建”和“绝对/相对路径”决定最终位置。
     @staticmethod
     def resolve(
         path: Union[str, Path],
@@ -95,6 +97,7 @@ class PathResolver:
             return cwd_path
 
         # For reading, check both locations (working dir first)
+        # 教程注释：优先工作目录让用户可覆盖包内默认资源，实现“本地配置覆盖内置模板”。
         if cwd_path.exists():
             return cwd_path
         if package_path.exists():

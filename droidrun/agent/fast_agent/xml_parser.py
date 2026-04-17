@@ -41,6 +41,8 @@ class ToolResult:
     is_error: bool = False
 
 
+
+# 教程注释：这个函数负责把模型输出中的 XML 工具调用解析成结构化 Python 对象，是“模型文本 -> 程序动作”的关键桥梁。
 def parse_tool_calls(
     text: str, param_types: Optional[Dict[str, str]] = None
 ) -> Tuple[str, List[ToolCall]]:
@@ -103,6 +105,8 @@ def parse_tool_calls(
     return text_before, calls
 
 
+
+# 教程注释：这个函数把真实工具执行结果重新包装成 XML，便于下一轮继续喂回给模型做决策。
 def format_tool_results(results: List[ToolResult]) -> str:
     """Format tool results as XML for injection into conversation.
 
@@ -137,6 +141,7 @@ def _sanitize_param_content(block: str) -> str:
     which would break XML parsing. This escapes content inside
     <parameter> tags only, leaving the XML structure intact.
     """
+    # 教程注释：只转义 parameter 内容而不改动 XML 标签结构，可最大限度保留模型原始调用意图。
 
     def _escape(m: re.Match) -> str:
         pre, content, post = m.group(1), m.group(2), m.group(3)
@@ -162,6 +167,7 @@ def _coerce_param(
     expected = param_types.get(name, "string")
 
     if expected == "boolean":
+        # 教程注释：布尔参数按 true/false 字符串规范化，避免大小写差异引发解析歧义。
         return value.strip().lower() == "true"
 
     if expected == "number":

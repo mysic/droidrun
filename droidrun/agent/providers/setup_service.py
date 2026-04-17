@@ -15,6 +15,7 @@ from droidrun.agent.providers import (
 from droidrun.config_manager.config_manager import DroidConfig, LLMProfile
 from droidrun.config_manager.env_keys import load_env_keys, save_env_keys
 
+# 教程注释：不同 variant 的默认 kwargs（例如 OAuth 模式下默认 max_tokens）。
 DEFAULT_KWARGS_BY_VARIANT: dict[str, dict[str, int]] = {
     "anthropic_oauth": {"max_tokens": 1024},
     "gemini_oauth_code_assist": {"max_tokens": 1024},
@@ -25,6 +26,7 @@ _ZAI_GLOBAL_BASE_URL = "https://api.z.ai/api/paas/v4"
 _ZAI_CODING_GLOBAL_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
 
 
+# 教程注释：SetupSelection 表示配置向导中用户选定的一组 provider 参数。
 @dataclass(frozen=True)
 class SetupSelection:
     family_id: str
@@ -37,15 +39,18 @@ class SetupSelection:
     credential_path: str | None = None
 
 
+# 教程注释：返回 provider 一级选项（family）。
 def family_choices() -> tuple[ProviderFamilySpec, ...]:
     return list_provider_families()
 
 
+# 教程注释：返回 family 对应的鉴权模式选项。
 def auth_mode_choices(family_id: str) -> tuple[str, ...]:
     family = next(f for f in list_provider_families() if f.id == family_id)
     return tuple(variant.auth_mode for variant in family.variants)
 
 
+# 教程注释：返回某个 family+auth_mode 下可选模型。
 def variant_models(family_id: str, auth_mode: str) -> tuple[str, ...]:
     variant = resolve_provider_variant(family_id, auth_mode)
     return tuple(variant.models)
@@ -78,6 +83,7 @@ def _probe_zai_chat_completions(
         return False
 
 
+# 教程注释：ZAI coding_api 模式会做可用性探测，必要时从 glm-5 回退到 glm-4.7。
 def _resolve_zai_selection(
     selection: SetupSelection,
     base_url: str | None,
@@ -124,6 +130,7 @@ def _resolve_zai_selection(
     return effective_base_url, effective_model
 
 
+# 教程注释：把 variant + 用户选择组装成可持久化的 LLMProfile。
 def create_profile_for_variant(
     variant: ProviderVariantSpec,
     selection: SetupSelection,
@@ -166,6 +173,7 @@ def create_profile_for_variant(
     )
 
 
+# 教程注释：将用户选择批量应用到多个角色 profile，并处理 env key 与隐藏角色回填。
 def apply_selection_to_roles(
     config: DroidConfig,
     selection: SetupSelection,

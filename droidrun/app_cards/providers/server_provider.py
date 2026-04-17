@@ -14,6 +14,7 @@ from droidrun.app_cards.app_card_provider import AppCardProvider
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：服务端 provider 通过 HTTP 获取 app card，带超时重试和缓存，适合动态更新策略。
 class ServerAppCardProvider(AppCardProvider):
     """Load app cards from remote server with in-memory caching."""
 
@@ -31,6 +32,7 @@ class ServerAppCardProvider(AppCardProvider):
         self.max_retries = max_retries
         self._content_cache: Dict[tuple[str, str], str] = {}
 
+    # 教程注释：这里把 package + instruction 发送到服务端，按响应码决定返回内容或空结果。
     async def load_app_card(self, package_name: str, instruction: str = "") -> str:
         """
         Load app card from remote server.
@@ -54,6 +56,7 @@ class ServerAppCardProvider(AppCardProvider):
         endpoint = f"{self.server_url}/app-cards"
         payload = {"package_name": package_name, "instruction": instruction}
 
+        # 教程注释：这里用小次数重试换取稳定性，避免瞬时网络抖动导致直接丢失 app card。
         for attempt in range(1, self.max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:

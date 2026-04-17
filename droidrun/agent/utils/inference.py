@@ -28,6 +28,8 @@ def _should_use_minimax_vision_path(llm, messages: list) -> bool:
     )
 
 
+
+# 教程注释：acall_with_retries 是聊天调用总入口，统一处理重试、超时、流式输出和空响应校验。
 async def acall_with_retries(
     llm,
     messages: list,
@@ -234,6 +236,7 @@ async def _stream_complete_response(
     return response
 
 
+# 教程注释：这个函数专门处理结构化输出场景，确保模型返回值能落到指定的 Pydantic 模型上。
 async def astructured_predict_with_retries(
     llm,
     output_cls: Type[T],

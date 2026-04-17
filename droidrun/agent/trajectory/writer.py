@@ -171,6 +171,7 @@ class WriterWorker:
     """
 
     def __init__(self, max_queue_size: int = 300):
+        # 教程注释：写入队列设置上限，避免高频截图/事件导致内存无限增长。
         self.queue = asyncio.Queue(maxsize=max_queue_size)
         self.worker_task = None
         self.running = False
@@ -280,6 +281,7 @@ class TrajectoryWriter:
             trajectory: Trajectory instance with data to persist
             stage: Label for this save point (e.g. "init", "step_1", "final")
         """
+        # 教程注释：这里先做数据快照再异步入队，避免写入期间被运行中对象继续修改。
         if not self._started:
             logger.warning("TrajectoryWriter not started, skipping save")
             return
@@ -390,6 +392,7 @@ class TrajectoryWriter:
     def _create_screenshot_jobs(
         self, screenshot_queue_snapshot, trajectory, trajectory_id, stage
     ) -> List[ScreenshotWriteJob]:
+        # 教程注释：截图按递增编号落盘，保证后续 GIF 合成顺序稳定可预测。
         jobs = []
         screenshots_folder = trajectory.trajectory_folder / "screenshots"
         screenshots_folder.mkdir(exist_ok=True)

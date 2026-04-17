@@ -9,12 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from droidrun.telemetry import PackageVisitEvent, capture
 
 
+# 教程注释：QueuedUserMessage 表示“执行中途插入的新用户消息”，用于支持长任务过程中的追加指令。
 class QueuedUserMessage(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     message: str
     queued_at_step: int = 0
 
 
+
+# 教程注释：DroidAgentState 是所有 Agent 共享的状态中心，里面同时保存设备快照、规划信息、动作历史和完成状态。
 class DroidAgentState(BaseModel):
     """
     State model for DroidAgent workflow - shared across parent and child workflows.
@@ -119,6 +122,7 @@ class DroidAgentState(BaseModel):
     # Methods for action functions
     # ========================================================================
 
+    # 教程注释：remember 把信息写进 FastAgent 的短期记忆，供后续回合继续参考。
     async def remember(self, information: str) -> str:
         """Store information in fast_memory for FastAgent context."""
         if (
@@ -132,6 +136,7 @@ class DroidAgentState(BaseModel):
             self.fast_memory = self.fast_memory[-10:]
         return f"Remembered: {information}"
 
+    # 教程注释：complete 会把任务标记为结束，并记录最终成功状态与答案，是 FastAgent 收尾的关键开关。
     async def complete(
         self, success: bool, reason: str = "", message: str = ""
     ) -> None:
@@ -147,6 +152,7 @@ class DroidAgentState(BaseModel):
         self.success = success
         self.answer = answer or "Task completed successfully."
 
+    # 教程注释：queue_user_message 允许在任务运行期间插入新的用户消息，先入队，稍后由 Agent 消费。
     def queue_user_message(self, message: str) -> QueuedUserMessage:
         if not message or not message.strip():
             raise ValueError("Cannot queue an empty or whitespace-only message.")
@@ -156,6 +162,7 @@ class DroidAgentState(BaseModel):
         self.pending_user_messages.append(queued)
         return queued
 
+    # 教程注释：drain_user_messages 会一次性取走当前积压消息并清空队列，保证同一批插队消息只被消费一次。
     def drain_user_messages(self) -> list[QueuedUserMessage]:
         if not self.pending_user_messages:
             return []
@@ -163,6 +170,7 @@ class DroidAgentState(BaseModel):
         self.pending_user_messages.clear()
         return messages
 
+    # 教程注释：update_current_app 会同步更新当前应用信息，并顺便记录应用访问遥测事件。
     def update_current_app(self, package_name: str, activity_name: str):
         """
         Update package and activity together, capturing telemetry event only once.

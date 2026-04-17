@@ -12,6 +12,7 @@ from llama_index.core.workflow import Event
 from droidrun.agent.usage import UsageResult
 
 
+# 教程注释：Executor 的事件把“模型建议了什么动作”和“动作实际执行结果如何”拆成不同阶段。
 class ExecutorContextEvent(Event):
     """Context prepared, ready for LLM call."""
 

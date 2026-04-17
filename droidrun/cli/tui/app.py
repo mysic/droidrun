@@ -48,6 +48,7 @@ BANNER = """[#CAD3F6]
 [#838BBC]Type a command or [bold]/[/bold] for options[/#838BBC]"""
 
 
+# 教程注释：DroidTUI 是一个基于 Textual 的前端壳层，负责把设备状态、日志、命令输入和设置面板组织成一个交互式终端界面。
 class DroidTUI(App):
 
     ALLOW_SELECT = False
@@ -150,6 +151,7 @@ class DroidTUI(App):
 
     # ── Autoconnect ──
 
+    # 教程注释：启动时自动探测在线设备并验证 portal 是否可用，这样用户打开 TUI 后可以直接进入可执行状态。
     async def _autoconnect(self) -> None:
         """Silently find and verify a device on startup."""
         from async_adbutils import adb
@@ -208,6 +210,7 @@ class DroidTUI(App):
             return
         self.run_worker(self._health_check(), group="health", exclusive=True)
 
+    # 教程注释：健康检查会持续验证当前设备连通性，并在断开或恢复时更新状态栏与日志提示。
     async def _health_check(self) -> None:
         """Ping the current device. Handle disconnect/reconnect."""
         import logging
@@ -273,6 +276,7 @@ class DroidTUI(App):
 
     # ── Input messages ──
 
+    # 教程注释：这里是输入主路由，统一分发为普通命令、斜杠命令或“等待下一次输入”的参数补全场景。
     def on_input_bar_submitted(self, message: InputBar.Submitted) -> None:
         text = message.value.strip()
         if not text:
@@ -344,6 +348,7 @@ class DroidTUI(App):
 
     # ── Slash commands ──
 
+    # 教程注释：斜杠命令相当于 TUI 内部快捷控制层，先把文本解析成 Command，再映射到 App 上的 action_* 处理器。
     def _handle_slash_command(self, text: str) -> None:
         parts = text.strip().split()
         if not parts:

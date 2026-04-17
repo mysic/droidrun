@@ -18,6 +18,8 @@ SUPPORTED_PROVIDERS = [
 ]
 
 
+
+# 教程注释：load_llm 会根据 provider 名称选择具体实现类，并把通用 kwargs 转成对应 SDK 的初始化参数。
 def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM:
     """Load and initialize a configured LLM backend.
 
@@ -90,6 +92,7 @@ def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM
     return llm_class(**filtered_kwargs)
 
 
+# 教程注释：这个函数把多份 LLMProfile 批量实例化成真正可用的模型对象字典，供不同 Agent 角色使用。
 def load_llms_from_profiles(
     profiles: dict[str, "LLMProfile"],
     profile_names: list[str] | None = None,

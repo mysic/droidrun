@@ -5,6 +5,7 @@ from typing import Any, Dict
 VERSION = 5
 
 
+# 教程注释：这个迁移移除历史示例 external_agents 条目，避免旧示例污染当前配置。
 def migrate(config: Dict[str, Any]) -> Dict[str, Any]:
     """Remove legacy mai_ui and autoglm example entries from external_agents."""
     external_agents = config.get("external_agents", {})

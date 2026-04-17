@@ -13,6 +13,7 @@ from droidrun.agent.utils.inference import acomplete_with_retries
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：AppStarter 是“按描述打开应用”的专用工作流，把应用匹配逻辑从主 Agent 中拆出来独立复用。
 class AppStarter(Workflow):
     """
     A simple workflow that opens an app based on a description.
@@ -37,6 +38,7 @@ class AppStarter(Workflow):
         self.llm = llm
         self.stream = stream
 
+    # 教程注释：核心步骤会先列出已安装应用，再让 LLM 选 package，最后调用 driver 启动应用。
     @step
     async def open_app_step(self, ev: StartEvent, ctx: Context) -> StopEvent:
         """
@@ -50,7 +52,7 @@ class AppStarter(Workflow):
         """
         app_description = ev.app_description
 
-        # Get list of installed apps
+        # 教程注释：先抓取设备当前应用清单，把“自然语言描述 -> package”问题转成受限匹配题。
         apps = await self.driver.get_apps(include_system=True)
 
         # Format apps list for LLM
@@ -86,7 +88,7 @@ Choose the most appropriate app based on the description. Return the package nam
         response = await acomplete_with_retries(self.llm, prompt, stream=self.stream)
         response_text = response.text.strip()
 
-        # Parse JSON response - extract content between { and }
+        # 教程注释：这里容忍模型输出包裹解释文本，只提取最内层 JSON 片段。
         try:
             start = response_text.find("{")
             end = response_text.rfind("}") + 1
@@ -104,6 +106,7 @@ Choose the most appropriate app based on the description. Return the package nam
                 result=f"Could not open app: no installed app matches '{app_description}'"
             )
 
+        # 教程注释：真正的设备启动仍交给 driver；工作流只负责决策与错误归一。
         logger.info(f"Starting app {package_name}")
         result = await self.driver.start_app(package_name)
 

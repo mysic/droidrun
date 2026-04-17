@@ -18,6 +18,7 @@ from droidrun.agent.utils.inference import astructured_predict_with_retries
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：StructuredOutputAgent 专门负责把最终自然语言答案提取成结构化 Pydantic 对象。
 class StructuredOutputAgent(Workflow):
     """
     Agent that extracts structured output from text answers.
@@ -37,6 +38,7 @@ class StructuredOutputAgent(Workflow):
         self.pydantic_model = pydantic_model
         self.answer_text = answer_text
 
+    # 教程注释：这一步通过 structured_predict 做类型约束提取，成功返回结构化结果，失败返回错误信息。
     @step
     async def extract_structured_output(
         self, ctx: Context, ev: StartEvent
@@ -47,7 +49,7 @@ class StructuredOutputAgent(Workflow):
         logger.debug("🔍 Extracting structured output from final answer...")
 
         try:
-            # Create prompt for extraction
+            # 教程注释：Prompt 很短，因为真正的约束主要来自 pydantic_model 的 schema。
             prompt = PromptTemplate(
                 "Extract structured information from the following text:\n\n{text}"
             )
@@ -69,6 +71,7 @@ class StructuredOutputAgent(Workflow):
             )
 
         except Exception as e:
+            # 教程注释：这里不抛异常给主 Agent，而是把失败包装成结果，避免最终回答链整体失败。
             logger.error(f"❌ Failed to extract structured output: {e}")
 
             return StopEvent(

@@ -53,6 +53,7 @@ class IOSStateProvider(StateProvider):
         self.use_normalized = use_normalized
 
     async def get_state(self) -> UIState:
+        # 教程注释：iOS 侧把原始文本树解析成统一 UIState，尽量复用 Android 上层动作链。
         try:
             raw = await self.driver.get_ui_tree()
         except DeviceDisconnectedError:
@@ -110,6 +111,7 @@ def _parse_a11y_tree(a11y_text: str) -> List[Dict[str, Any]]:
 
     Moved verbatim from ``IOSTools._parse_ios_accessibility_tree``.
     """
+    # 教程注释：把 iOS 文本树转成结构化元素列表，并在这里完成去噪和去重。
     elements: List[Dict[str, Any]] = []
     element_index = 0
 
@@ -248,6 +250,7 @@ def _format_elements(
     screen_height: int,
 ) -> str:
     """Build the text representation shown to the agent."""
+    # 教程注释：最终产物是模型可读的编号文本，格式与 Android 侧尽量保持一致。
     schema = "'index. className: text - bounds(x1,y1,x2,y2)'"
     if not elements:
         return f"Current UI elements:\n{schema}:\nNo UI elements found"

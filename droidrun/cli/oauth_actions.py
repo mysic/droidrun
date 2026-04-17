@@ -22,6 +22,7 @@ from droidrun.agent.utils.oauth.openai_oauth_llm import (
 SETUP_TOKEN_EXPIRES_IN_SECONDS = 365 * 24 * 60 * 60
 
 
+# 教程注释：这些函数封装了不同 provider 的 OAuth 登录流程，向上层屏蔽 provider SDK 差异。
 def run_openai_oauth_login(
     credential_path: str,
     model: str | None,
@@ -87,6 +88,7 @@ def run_anthropic_setup_token_oauth(
     )
 
 
+# 教程注释：保存凭据时会合并已有配置并收紧文件权限，避免覆盖其他 provider 的认证信息。
 def save_anthropic_setup_token(credential_path: str, token: str) -> None:
     cred_path = Path(credential_path).expanduser()
     cred_path.parent.mkdir(parents=True, exist_ok=True)

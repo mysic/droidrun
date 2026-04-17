@@ -38,6 +38,7 @@ from droidrun.agent.manager.events import (
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：EventHandler 负责把内部工作流事件翻译成用户能看懂的日志文本，是 CLI/TUI/SDK 的展示适配层。
 class EventHandler:
     """Translates workflow events into logger calls.
 
@@ -45,6 +46,7 @@ class EventHandler:
     ``extra`` params so that any attached handler can render them.
     """
 
+    # 教程注释：handle 通过 isinstance 按事件类型分流，不同事件会映射成不同的日志提示和颜色。
     def handle(self, event) -> None:  # noqa: C901
         # ── Screenshots / UI state ──────────────────────────────────
         if isinstance(event, ScreenshotEvent):
@@ -175,4 +177,5 @@ class EventHandler:
 
         # ── Fallback ────────────────────────────────────────────────
         else:
+            # 教程注释：未知事件走兜底输出，保证新增事件类型不会在展示层“静默丢失”。
             logger.debug(f"🔄 {event.__class__.__name__}")

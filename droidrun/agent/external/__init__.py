@@ -48,6 +48,7 @@ def list_agents() -> List[str]:
     Returns:
         Sorted list of agent names (module stems or package directory names).
     """
+    # 教程注释：通过目录约定自动发现 external agent，避免在核心代码里硬编码插件清单。
     agents: list[str] = []
     for item in _EXTERNAL_DIR.iterdir():
         if item.name.startswith(("_", ".")):
@@ -68,6 +69,7 @@ def load_agent(name: str) -> Optional[ExternalAgentModule]:
     Returns:
         Dict with ``run`` function and ``config`` defaults, or *None* on failure.
     """
+    # 教程注释：动态导入后会强校验 run 是否为 async，确保外部代理满足统一执行契约。
     try:
         module = importlib.import_module(f"droidrun.agent.external.{name}")
 

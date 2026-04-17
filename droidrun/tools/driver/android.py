@@ -21,6 +21,7 @@ logger = logging.getLogger("droidrun")
 PORTAL_DEFAULT_TCP_PORT = 8080
 
 
+# 教程注释：AndroidDriver 封装了“如何真正和设备通信”，上层 Agent 不需要知道 ADB 或 Portal 的细节。
 class AndroidDriver(DeviceDriver):
     """Raw Android device I/O via ADB + Portal."""
 
@@ -64,6 +65,7 @@ class AndroidDriver(DeviceDriver):
 
     # -- lifecycle -----------------------------------------------------------
 
+    # 教程注释：connect 会建立 ADB 连接、初始化 PortalClient，并确保输入法等依赖准备完成。
     async def connect(self) -> None:
         if self._connected:
             return

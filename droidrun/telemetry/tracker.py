@@ -33,6 +33,7 @@ posthog = Posthog(
 )
 
 
+# 教程注释：先判断用户是否开启遥测，再决定后续 capture/flush 是否真正发送事件。
 def is_telemetry_enabled():
     """
     Check if telemetry is enabled via environment variable.
@@ -83,6 +84,7 @@ def get_user_id() -> str:
     Returns:
         User UUID string, or "unknown" if an error occurs.
     """
+    # 教程注释：user_id 持久化到本地文件，保证多次运行能聚合为同一匿名用户轨迹。
     try:
         # Ensure directory exists
         USER_ID_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +111,8 @@ def get_user_id() -> str:
         return "unknown"
 
 
+
+# 教程注释：capture 是遥测发送入口，会把结构化事件转换成 PostHog 能识别的属性并上报。
 def capture(event: TelemetryEvent, user_id: str | None = None):
     """
     Capture and send a telemetry event to PostHog.
@@ -140,6 +144,7 @@ def capture(event: TelemetryEvent, user_id: str | None = None):
 
 
 async def flush():
+    # 教程注释：flush 在退出前尝试限时上报，超时则放弃，避免阻塞主流程。
     try:
         if not is_telemetry_enabled():
             return

@@ -48,6 +48,7 @@ class InputBar(Input):
     def history(self) -> list[str]:
         return list(self._history)
 
+    # 教程注释：这里重写按键处理，把 Tab、方向键、Enter 从普通输入框语义改造成命令历史和斜杠菜单控制语义。
     def _on_key(self, event: events.Key) -> None:
         if event.key == "tab":
             event.prevent_default()
@@ -86,6 +87,7 @@ class InputBar(Input):
 
         super()._on_key(event)
 
+    # 教程注释：输入历史导航和 shell 类似，便于反复试运行同一条命令或快速微调参数。
     def _navigate_history(self, direction: int) -> None:
         if not self._history:
             return
@@ -110,6 +112,7 @@ class InputBar(Input):
         self.value = self._history[self._history_index]
         self.cursor_position = len(self.value)
 
+    # 教程注释：提交时既发送消息，也把当前命令写入历史，形成输入组件与上层 App 的事件桥接点。
     def _submit(self) -> None:
         text = self.value.strip()
         if not text:
@@ -122,6 +125,7 @@ class InputBar(Input):
         self.post_message(self.Submitted(text))
         self.value = ""
 
+    # 教程注释：watch_value 用 Textual 的响应式钩子检测是否进入斜杠模式，并通知下拉命令面板更新候选项。
     def watch_value(self, value: str) -> None:
         is_slash = value.startswith("/")
 

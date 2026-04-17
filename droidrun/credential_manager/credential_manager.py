@@ -8,6 +8,7 @@ class CredentialNotFoundError(KeyError):
     pass
 
 
+# 教程注释：CredentialManager 定义了统一凭证解析接口，上层只依赖“按 key 取值”和“列出可用 key”，不关心底层存储来自文件还是别的后端。
 class CredentialManager(ABC):
     """Abstract base class for credential resolution."""
 
@@ -28,6 +29,7 @@ class CredentialManager(ABC):
         pass
 
     @abstractmethod
+    # 教程注释：get_keys 主要用于发现当前可引用的凭证名，便于调试、校验或给上层做补全提示。
     async def get_keys(self) -> List[str]:
         """
         Get all available credential keys.

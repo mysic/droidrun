@@ -17,6 +17,8 @@ from droidrun.config_manager.loader import ConfigLoader, OutdatedConfigError
 from droidrun.config_manager.path_resolver import PathResolver
 from droidrun.config_manager.prompt_loader import PromptLoader
 
+
+# 教程注释：这个模块把配置相关的常用类集中导出，调用方只 import config_manager 就能拿到主配置接口。
 __all__ = [
     "DroidConfig",
     "LLMProfile",

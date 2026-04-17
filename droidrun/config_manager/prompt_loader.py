@@ -17,6 +17,7 @@ import aiofiles
 from jinja2 import Environment
 
 
+# 教程注释：PromptLoader 负责把 Jinja2 模板文件或模板字符串渲染成最终可发送给模型的 Prompt。
 class PromptLoader:
     """Jinja2 template renderer - loads from absolute file paths using aiofiles."""
 
@@ -34,6 +35,7 @@ class PromptLoader:
 
         return cls._env
 
+    # 教程注释：load_prompt 用于“从文件加载并渲染 Prompt”，是运行时最常见的模板入口。
     @staticmethod
     async def load_prompt(file_path: str, variables: Dict[str, Any] = None) -> str:
         """
@@ -67,6 +69,7 @@ class PromptLoader:
         # Use render_template for actual rendering
         return PromptLoader.render_template(template_content, variables)
 
+    # 教程注释：render_template 用于“直接渲染一段字符串模板”，常见于运行时自定义 Prompt。
     @staticmethod
     def render_template(template_string: str, variables: Dict[str, Any] = None) -> str:
         """

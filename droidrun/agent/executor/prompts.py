@@ -3,6 +3,7 @@ Prompts for the ExecutorAgent.
 """
 
 
+# 教程注释：从固定分段（Thought/Action/Description）中抽取执行器需要的结构化动作指令。
 def parse_executor_response(response: str) -> dict:
     """
     Parse the Executor LLM response.

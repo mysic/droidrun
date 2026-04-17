@@ -5,6 +5,8 @@ Droidrun - A framework for controlling Android devices through LLM agents.
 import logging
 from importlib.metadata import version
 
+
+# 教程注释：这里读取已安装包的版本号，让 CLI、日志或 SDK 使用者都能拿到统一版本信息。
 __version__ = version("droidrun")
 
 # Attach a default CLILogHandler so that every consumer (CLI, TUI, SDK,
@@ -45,6 +47,8 @@ from droidrun.config_manager import (
 from droidrun.macro import MacroPlayer, replay_macro_file, replay_macro_folder
 from droidrun.tools import AndroidDriver, DeviceDriver, RecordingDriver
 
+
+# 教程注释：__all__ 决定了这个包对外公开的“主接口清单”，相当于给 SDK 用户准备的官方入口表。
 # Make main components available at package level
 __all__ = [
     # Agent

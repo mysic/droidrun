@@ -25,6 +25,8 @@ class DeviceDriver:
     ``platform`` identifies the device type (e.g. "Android", "iOS").
     """
 
+    # 教程注释：DeviceDriver 定义跨平台最小能力契约，上层 Agent 只依赖这层抽象而不依赖具体实现。
+
     platform: str = "Android"
     supported: set[str] = set()
     supported_buttons: set[str] = set()
@@ -74,6 +76,7 @@ class DeviceDriver:
 
         Raises ``ValueError`` if *button* is not in ``supported_buttons``.
         """
+        # 教程注释：按键集合由驱动声明，调用侧可据此在提示词或校验阶段做能力裁剪。
         raise NotImplementedError
 
     async def drag(

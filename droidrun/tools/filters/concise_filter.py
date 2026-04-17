@@ -4,9 +4,11 @@ from typing import Dict, Any, Optional
 from .base import TreeFilter
 
 
+# 教程注释：ConciseFilter 追求“更干净的树”，通过尺寸和屏幕相交判断快速剔除噪音节点。
 class ConciseFilter(TreeFilter):
     """Concise tree filtering (formerly Droidrun)."""
 
+    # 教程注释：filter 是入口，会读取屏幕和过滤参数，再递归处理整棵树。
     def filter(
         self, a11y_tree: Dict[str, Any], device_context: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -23,6 +25,7 @@ class ConciseFilter(TreeFilter):
         filtering_params: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
         """Recursively filter node."""
+        # 教程注释：当前节点先做可见性和尺寸裁剪，通过后才继续处理 children，避免无效递归开销。
         min_size = filtering_params.get("min_element_size", 5)
         screen_width = screen_bounds.get("width", 1080)
         screen_height = screen_bounds.get("height", 2400)

@@ -30,6 +30,8 @@ def select_prompt(
 ) -> str:
     """Interactive select prompt with arrow-key UX when available."""
 
+    # 教程注释：优先使用 InquirerPy 提供更好的交互体验，缺失时自动回退到 click 文本选择。
+
     inquirer = _import_inquirer_select()
     if inquirer is not None:
         rendered = []
@@ -67,6 +69,7 @@ def text_prompt(
     default: str | None = None,
     secret: bool = False,
 ) -> str:
+    # 教程注释：文本输入同样采用“增强交互优先、基础交互保底”的双实现策略。
     inquirer = _import_inquirer_select()
     normalized_default = default if default is not None else ""
     if inquirer is not None:

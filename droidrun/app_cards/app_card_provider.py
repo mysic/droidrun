@@ -8,6 +8,7 @@ Supports multiple backends: local files, remote servers, or composite strategies
 from abc import ABC, abstractmethod
 
 
+# 教程注释：AppCardProvider 定义统一接口，让本地、远程、组合等不同来源的 app card 都能以同一种方式调用。
 class AppCardProvider(ABC):
     """Abstract interface for loading app-specific instruction cards."""
 

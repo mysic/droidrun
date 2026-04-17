@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from .base import TreeFilter
 
 
+# 教程注释：DetailedFilter 使用更细的可见性规则，适合需要更完整界面细节的场景。
 class DetailedFilter(TreeFilter):
     """Detailed tree filtering with 10% visibility rule."""
 
@@ -17,6 +18,7 @@ class DetailedFilter(TreeFilter):
         self.filter_keyboard = filter_keyboard
         self.clip_bounds = clip_bounds
 
+    # 教程注释：这一层按“裁剪 bounds -> 过滤键盘 -> 过滤越界节点”的顺序处理整棵 UI 树。
     def filter(
         self, a11y_tree: Dict[str, Any], device_context: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -126,6 +128,7 @@ class DetailedFilter(TreeFilter):
 
         return {**node, "children": filtered_children}
 
+    # 教程注释：这里会递归判断节点可见比例，只删除真正不可见且没有可保留子节点的分支。
     def _filter_out_of_bounds(
         self, node: Dict[str, Any], screen_width: int, screen_height: int
     ) -> Optional[Dict[str, Any]]:

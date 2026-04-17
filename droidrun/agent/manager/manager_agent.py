@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("droidrun")
 
 
+# 教程注释：ManagerAgent 是“规划器”，负责整理上下文、请求大模型生成计划，并把计划结果写回共享状态。
 class ManagerAgent(Workflow):
     """
     Planning and reasoning agent that decides what to do next.
@@ -368,6 +369,7 @@ class ManagerAgent(Workflow):
     # Workflow Steps
     # ========================================================================
 
+    # 教程注释：这一阶段先收集截图、UI 树、当前应用等现场信息，相当于给规划器准备完整上下文。
     @step
     async def prepare_context(
         self, ctx: Context, ev: StartEvent
@@ -439,6 +441,7 @@ class ManagerAgent(Workflow):
         # Build user message and add to history
         user_content = self._build_user_message_content()
 
+        # 教程注释：Manager 会在进入本轮规划前，把外部插队消息拼进最新 user message，让规划器优先看到追加要求。
         drained = self.shared_state.drain_user_messages()
         if drained:
             external_block = "\n".join(
@@ -466,6 +469,7 @@ class ManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这一阶段真正调用 LLM，请它基于上下文给出计划、子目标和可能的完成答案。
     @step
     async def get_response(
         self, ctx: Context, ev: ManagerContextEvent
@@ -506,6 +510,7 @@ class ManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这一阶段把模型文本解析成结构化结果，并同步更新 shared_state，供后续执行器继续使用。
     @step
     async def process_response(
         self, ctx: Context, ev: ManagerResponseEvent
@@ -552,6 +557,7 @@ class ManagerAgent(Workflow):
         ctx.write_event_to_stream(event)
         return event
 
+    # 教程注释：这一阶段把规划阶段的最终结果返回给上层工作流，形成一次完整的 planning 回合。
     @step
     async def finalize(self, ctx: Context, ev: ManagerPlanDetailsEvent) -> StopEvent:
         logger.debug("✅ Manager planning complete")
