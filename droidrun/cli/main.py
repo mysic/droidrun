@@ -237,7 +237,7 @@ async def run_command(
 
         logger.debug("▶️  Starting agent execution...")
         logger.debug("Press Ctrl+C to stop")
-
+        # 教程注释：事件处理器负责把内部事件翻译成用户能看懂的日志文本，是 CLI/TUI/SDK 的展示适配层。
         event_handler = EventHandler()
 
         try:
