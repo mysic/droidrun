@@ -12,8 +12,10 @@ from rich.console import Console
 from rich.table import Table
 
 from droidrun.agent.utils.trajectory import Trajectory
+from droidrun.config_manager.config_manager import DeviceConfig
 from droidrun.config_manager.path_resolver import PathResolver
 from droidrun.macro.replay import MacroPlayer
+from droidrun.tools.driver.factory import device_config_uses_adb
 
 console = Console()
 
@@ -52,6 +54,35 @@ def macro_cli():
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--device", "-d", help="Device serial number", default=None)
 @click.option(
+    "--driver-backend",
+    type=click.Choice(["portal", "adb"]),
+    default="portal",
+    show_default=True,
+    help="Android driver backend to use for macro replay",
+)
+@click.option(
+    "--portal-mode",
+    type=click.Choice(["direct", "reverse"]),
+    default="direct",
+    show_default=True,
+    help="Portal connection mode when using the portal backend",
+)
+@click.option(
+    "--portal-url",
+    default=None,
+    help="Portal endpoint URL: http://... for direct mode or ws://... for reverse mode",
+)
+@click.option(
+    "--portal-token",
+    default=None,
+    help="Direct portal auth token copied from the Portal app",
+)
+@click.option(
+    "--auto-setup/--no-auto-setup",
+    default=True,
+    help="Auto-setup Portal when ADB is available",
+)
+@click.option(
     "--delay", "-t", help="Delay between actions (seconds)", default=1.0, type=float
 )
 @click.option(
@@ -68,6 +99,11 @@ def macro_cli():
 def replay(
     path: str,
     device: Optional[str],
+    driver_backend: str,
+    portal_mode: str,
+    portal_url: Optional[str],
+    portal_token: Optional[str],
+    auto_setup: bool,
     delay: float,
     start_from: int,
     max_steps: Optional[int],
@@ -83,6 +119,32 @@ def replay(
     start_from_zero = max(0, start_from - 1)
 
     async def get_device():
+        runtime_config = DeviceConfig(
+            serial=device,
+            platform="android",
+            driver_backend=driver_backend,
+            portal_connection_mode=portal_mode,
+            portal_url=portal_url,
+            portal_token=portal_token,
+            auto_setup=auto_setup,
+        )
+
+        if not device_config_uses_adb(runtime_config):
+            if portal_mode == "direct":
+                if portal_url:
+                    logger.info(f"🌐 Using direct portal URL: {portal_url}")
+                    return None
+                logger.info(f"📱 Using portal target: {device}")
+                return device
+
+            if not portal_url:
+                raise ValueError("Portal reverse mode requires --portal-url with a ws:// host URL")
+
+            logger.info(f"🛰️ Waiting for reverse portal connection on: {portal_url}")
+            if device is not None:
+                logger.info(f"📱 Expecting reverse device id: {device}")
+            return device
+
         if device is None:
             logger.info("🔍 Finding connected device...")
             devices = await adb.list()
@@ -97,7 +159,19 @@ def replay(
 
     asyncio.run(
         _replay_with_device(
-            path, device, delay, start_from_zero, max_steps, dry_run, logger, get_device
+            path,
+            device,
+            driver_backend,
+            portal_mode,
+            portal_url,
+            portal_token,
+            auto_setup,
+            delay,
+            start_from_zero,
+            max_steps,
+            dry_run,
+            logger,
+            get_device,
         )
     )
 
@@ -105,6 +179,11 @@ def replay(
 async def _replay_with_device(
     path: str,
     device: str,
+    driver_backend: str,
+    portal_mode: str,
+    portal_url: Optional[str],
+    portal_token: Optional[str],
+    auto_setup: bool,
     delay: float,
     start_from: int,
     max_steps: Optional[int],
@@ -113,12 +192,30 @@ async def _replay_with_device(
     get_device,
 ):
     device = await get_device()
-    await _replay_async(path, device, delay, start_from, max_steps, dry_run, logger)
+    await _replay_async(
+        path,
+        device,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        auto_setup,
+        delay,
+        start_from,
+        max_steps,
+        dry_run,
+        logger,
+    )
 
 
 async def _replay_async(
     path: str,
     device: str,
+    driver_backend: str,
+    portal_mode: str,
+    portal_url: Optional[str],
+    portal_token: Optional[str],
+    auto_setup: bool,
     delay: float,
     start_from: int,
     max_steps: Optional[int],
@@ -133,11 +230,27 @@ async def _replay_async(
 
         if resolved_path.is_file():
             logger.info(f"📄 Loading macro from file: {resolved_path}")
-            player = MacroPlayer(device_serial=device, delay_between_actions=delay)
+            player = MacroPlayer(
+                device_serial=device,
+                delay_between_actions=delay,
+                driver_backend=driver_backend,
+                portal_mode=portal_mode,
+                portal_url=portal_url,
+                portal_token=portal_token,
+                auto_setup=auto_setup,
+            )
             macro_data = player.load_macro_from_file(str(resolved_path))
         elif resolved_path.is_dir():
             logger.info(f"📁 Loading macro from folder: {resolved_path}")
-            player = MacroPlayer(device_serial=device, delay_between_actions=delay)
+            player = MacroPlayer(
+                device_serial=device,
+                delay_between_actions=delay,
+                driver_backend=driver_backend,
+                portal_mode=portal_mode,
+                portal_url=portal_url,
+                portal_token=portal_token,
+                auto_setup=auto_setup,
+            )
             macro_data = player.load_macro_from_folder(str(resolved_path))
         else:
             logger.error(f"❌ Invalid path: {resolved_path}")

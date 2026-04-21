@@ -120,11 +120,11 @@ async def main():
     """
     from llama_index.llms.openai import OpenAI
 
-    from droidrun.tools.driver.android import AndroidDriver
+    from droidrun.config_manager.config_manager import DeviceConfig
+    from droidrun.tools.driver.factory import create_driver_from_device_config
 
-    # Initialize driver with device serial (None for default device)
-    driver = AndroidDriver(serial=None)
-    await driver.connect()
+    # Initialize the default Android driver backend (Portal by default)
+    driver, _ = await create_driver_from_device_config(DeviceConfig())
 
     # Initialize LLM
     llm = OpenAI(model="gpt-4o-mini")

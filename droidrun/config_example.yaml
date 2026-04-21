@@ -115,11 +115,22 @@ llm_profiles:
 device:
   # Default device serial (null = auto-detect)
   serial: null
+  # Android driver backend: portal (default) or adb
+  driver_backend: portal
+  # Portal connection mode: direct (HTTP) or reverse (local ws host)
+  portal_connection_mode: direct
+  # Portal endpoint URL: http://... for direct mode, ws://... for reverse mode
+  portal_url: null
+  # Direct portal auth token copied from the Portal app main screen
+  portal_token: null
+  # Portal HTTP timeout in seconds
+  portal_timeout: 10.0
   # Use TCP communication instead of usb
   use_tcp: false
   # Platform: android or ios but currently only android is supported
   platform: android
   # Auto-install/update Portal APK and enable accessibility before each run
+  # Only applies when adb is available
   auto_setup: true
 
 # === Telemetry Settings ===

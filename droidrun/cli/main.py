@@ -56,6 +56,7 @@ from droidrun.config_manager.credential_paths import (
     GEMINI_OAUTH_CREDENTIAL_PATH,
 )
 from droidrun.telemetry import print_telemetry_message
+from droidrun.tools.driver.factory import device_config_uses_adb
 from droidrun.tools.driver.ios import discover_ios_portal, validate_ios_portal_url
 
 # Suppress all warnings
@@ -92,6 +93,10 @@ async def run_command(
     command: str,
     config_path: str | None = None,
     device: str | None = None,
+    driver_backend: str | None = None,
+    portal_mode: str | None = None,
+    portal_url: str | None = None,
+    portal_token: str | None = None,
     agent: str | None = None,
     provider: str | None = None,
     model: str | None = None,
@@ -163,6 +168,14 @@ async def run_command(
             config.device.serial = device
         if tcp is not None:
             config.device.use_tcp = tcp
+        if driver_backend is not None:
+            config.device.driver_backend = driver_backend
+        if portal_mode is not None:
+            config.device.portal_connection_mode = portal_mode
+        if portal_url is not None:
+            config.device.portal_url = portal_url
+        if portal_token is not None:
+            config.device.portal_token = portal_token
 
         # Logging overrides
         if debug is not None:
@@ -364,6 +377,28 @@ except Exception:
 @click.option("--config", "-c", help="Path to custom config file", default=None)
 @click.option("--device", "-d", help="Device serial number or IP address", default=None)
 @click.option(
+    "--driver-backend",
+    type=click.Choice(["portal", "adb"]),
+    default=None,
+    help="Android driver backend to use",
+)
+@click.option(
+    "--portal-mode",
+    type=click.Choice(["direct", "reverse"]),
+    default=None,
+    help="Portal connection mode when using the portal backend",
+)
+@click.option(
+    "--portal-url",
+    default=None,
+    help="Portal endpoint URL: http://... for direct mode or ws://... for reverse mode",
+)
+@click.option(
+    "--portal-token",
+    default=None,
+    help="Direct portal auth token copied from the Portal app",
+)
+@click.option(
     "--agent",
     "-a",
     type=click.Choice(_available_agents) if _available_agents else None,
@@ -434,6 +469,10 @@ async def run(
     command: str,
     config: str | None,
     device: str | None,
+    driver_backend: str | None,
+    portal_mode: str | None,
+    portal_url: str | None,
+    portal_token: str | None,
     agent: str | None,
     provider: str | None,
     model: str | None,
@@ -457,6 +496,10 @@ async def run(
             command=command,
             config_path=config,
             device=device,
+            driver_backend=driver_backend,
+            portal_mode=portal_mode,
+            portal_url=portal_url,
+            portal_token=portal_token,
             agent=agent,
             provider=provider,
             model=model,
@@ -477,14 +520,31 @@ async def run(
         # Disable Droidrun keyboard after execution
         # Note: Port forwards are managed automatically and persist until device disconnect
         try:
-            if not ios:
-                device_obj = await adb.device(device)
+            cleanup_config = ConfigLoader.load(config)
+            if device is not None:
+                cleanup_config.device.serial = device
+            if driver_backend is not None:
+                cleanup_config.device.driver_backend = driver_backend
+            if portal_mode is not None:
+                cleanup_config.device.portal_connection_mode = portal_mode
+            if portal_url is not None:
+                cleanup_config.device.portal_url = portal_url
+            if portal_token is not None:
+                cleanup_config.device.portal_token = portal_token
+            if ios:
+                cleanup_config.device.platform = "ios"
+
+            if (
+                cleanup_config.device.platform != "ios"
+                and device_config_uses_adb(cleanup_config.device)
+            ):
+                device_obj = await adb.device(cleanup_config.device.serial)
                 if device_obj:
                     await device_obj.shell(
                         "ime disable com.droidrun.portal/.input.DroidrunKeyboardIME"
                     )
         except Exception:
-            click.echo("Failed to disable Droidrun keyboard")
+            pass
 
     # Exit with appropriate code
     sys.exit(0 if success else 1)

@@ -18,7 +18,7 @@ from async_adbutils import AdbDevice, adb
 from rich.console import Console
 
 from droidrun import __version__
-from droidrun.tools.driver.android import AndroidDriver
+from droidrun.tools.driver.portal import PortalDriver
 
 logger = logging.getLogger("droidrun")
 
@@ -316,7 +316,7 @@ async def ping_portal_tcp(device: AdbDevice, debug: bool = False):
         Exception: If Portal is not reachable via TCP or port forwarding fails
     """
     try:
-        driver = AndroidDriver(serial=device.serial, use_tcp=True)
+        driver = PortalDriver(serial=device.serial, use_tcp=True)
         await driver.connect()
     except Exception as e:
         raise Exception("Failed to setup TCP forwarding") from e

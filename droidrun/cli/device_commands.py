@@ -11,17 +11,10 @@ from functools import wraps
 from typing import Optional
 
 import click
-from async_adbutils import adb
 from rich.console import Console
 
 from droidrun.config_manager import ConfigLoader
-from droidrun.portal import ensure_portal_ready
-from droidrun.tools.driver.android import AndroidDriver
-from droidrun.tools.driver.ios import (
-    IOSDriver,
-    discover_ios_portal,
-    validate_ios_portal_url,
-)
+from droidrun.tools.driver.factory import create_driver_from_device_config
 from droidrun.tools.filters import ConciseFilter
 from droidrun.tools.formatters import IndexedFormatter
 from droidrun.tools.ui.ios_provider import IOSStateProvider
@@ -47,6 +40,28 @@ def device_options(f):
         "--config", "-c", "config_path", help="Path to config file", default=None
     )(f)
     f = click.option("--tcp/--no-tcp", default=None, help="Use TCP communication")(f)
+    f = click.option(
+        "--driver-backend",
+        type=click.Choice(["portal", "adb"]),
+        default=None,
+        help="Android driver backend to use",
+    )(f)
+    f = click.option(
+        "--portal-mode",
+        type=click.Choice(["direct", "reverse"]),
+        default=None,
+        help="Portal connection mode",
+    )(f)
+    f = click.option(
+        "--portal-url",
+        default=None,
+        help="Portal endpoint URL: http://... for direct mode or ws://... for reverse mode",
+    )(f)
+    f = click.option(
+        "--portal-token",
+        default=None,
+        help="Direct portal auth token copied from the Portal app",
+    )(f)
     f = click.option("--ios", is_flag=True, default=False, help="Target iOS device")(f)
     return f
 
@@ -57,6 +72,10 @@ async def _create_driver(
     device: Optional[str],
     config_path: Optional[str],
     tcp: Optional[bool],
+    driver_backend: Optional[str],
+    portal_mode: Optional[str],
+    portal_url: Optional[str],
+    portal_token: Optional[str],
     ios: bool,
 ):
     """Create and connect a device driver based on CLI options."""
@@ -66,41 +85,29 @@ async def _create_driver(
         config.device.serial = device
     if tcp is not None:
         config.device.use_tcp = tcp
+    if driver_backend is not None:
+        config.device.driver_backend = driver_backend
+    if portal_mode is not None:
+        config.device.portal_connection_mode = portal_mode
+    if portal_url is not None:
+        config.device.portal_url = portal_url
+    if portal_token is not None:
+        config.device.portal_token = portal_token
     if ios:
         config.device.platform = "ios"
 
-    is_ios = config.device.platform.lower() == "ios"
-
-    if is_ios:
-        if config.device.serial:
-            url = validate_ios_portal_url(config.device.serial)
-        else:
-            url = await discover_ios_portal()
-        driver = IOSDriver(url=url)
-        await driver.connect()
-        return driver, True
-
-    serial = config.device.serial
-    if serial is None:
-        devices = await adb.list()
-        if not devices:
-            raise click.ClickException("No connected Android devices found.")
-        serial = devices[0].serial
-
-    if config.device.auto_setup:
-        device_obj = await adb.device(serial=serial)
-        await ensure_portal_ready(device_obj, debug=False)
-
-    driver = AndroidDriver(serial=serial, use_tcp=config.device.use_tcp)
-    await driver.connect()
-    return driver, False
+    try:
+        return await create_driver_from_device_config(config.device, debug=False)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 async def _teardown_android(driver):
     """Disable Droidrun keyboard after direct command execution."""
-    if isinstance(driver, AndroidDriver) and driver.device:
+    device = getattr(driver, "device", None)
+    if device is not None:
         try:
-            await driver.device.shell(
+            await device.shell(
                 "ime disable com.droidrun.portal/.input.DroidrunKeyboardIME"
             )
         except Exception:
@@ -127,9 +134,18 @@ def device_cli():
 @device_cli.command()
 @device_options
 @coro
-async def screenshot(device, config_path, tcp, ios):
+async def screenshot(device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Take a screenshot and print the saved file path to stdout."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         png_bytes = await driver.screenshot()
         fd, path = tempfile.mkstemp(prefix="droidrun_", suffix=".png")
@@ -146,9 +162,18 @@ async def screenshot(device, config_path, tcp, ios):
 @device_cli.command()
 @device_options
 @coro
-async def ui(device, config_path, tcp, ios):
+async def ui(device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Print the UI accessibility tree with element bounds for targeting."""
-    driver, is_ios = await _create_driver(device, config_path, tcp, ios)
+    driver, is_ios = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         if is_ios:
             provider = IOSStateProvider(driver)
@@ -171,9 +196,18 @@ async def ui(device, config_path, tcp, ios):
 @click.argument("y", type=int)
 @device_options
 @coro
-async def tap(x, y, device, config_path, tcp, ios):
+async def tap(x, y, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Tap at screen coordinates."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         await driver.tap(x, y)
         click.echo(f"Tapped ({x}, {y})")
@@ -191,9 +225,18 @@ async def tap(x, y, device, config_path, tcp, ios):
 )
 @device_options
 @coro
-async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, ios):
+async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Swipe from (x1, y1) to (x2, y2)."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         await driver.swipe(x1, y1, x2, y2, duration_ms=duration * 1000)
         click.echo(f"Swiped ({x1}, {y1}) -> ({x2}, {y2})")
@@ -206,11 +249,20 @@ async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, ios):
 @click.argument("y", type=int)
 @device_options
 @coro
-async def long_press(x, y, device, config_path, tcp, ios):
+async def long_press(x, y, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Long press at screen coordinates."""
     if ios:
         raise click.ClickException("long-press is not supported on iOS")
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         await driver.swipe(x, y, x, y, 1000)
         click.echo(f"Long pressed ({x}, {y})")
@@ -223,9 +275,18 @@ async def long_press(x, y, device, config_path, tcp, ios):
 @click.option("--clear", is_flag=True, default=False, help="Clear field before typing")
 @device_options
 @coro
-async def type_text(text, clear, device, config_path, tcp, ios):
+async def type_text(text, clear, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Type text into the currently focused field. Use 'tap' first to focus."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         success = await driver.input_text(text, clear)
         if success:
@@ -242,9 +303,18 @@ async def type_text(text, clear, device, config_path, tcp, ios):
 )
 @device_options
 @coro
-async def press(button, device, config_path, tcp, ios):
+async def press(button, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Press a system button."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         await driver.press_button(button)
         click.echo(f"Pressed {button}")
@@ -256,9 +326,18 @@ async def press(button, device, config_path, tcp, ios):
 @click.option("--system/--no-system", default=False, help="Include system apps")
 @device_options
 @coro
-async def apps(system, device, config_path, tcp, ios):
+async def apps(system, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """List installed apps."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         app_list = await driver.get_apps(include_system=system)
         for app in app_list:
@@ -276,9 +355,18 @@ async def apps(system, device, config_path, tcp, ios):
 @click.argument("package")
 @device_options
 @coro
-async def start(package, device, config_path, tcp, ios):
+async def start(package, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Launch an app by package name."""
-    driver, _ = await _create_driver(device, config_path, tcp, ios)
+    driver, _ = await _create_driver(
+        device,
+        config_path,
+        tcp,
+        driver_backend,
+        portal_mode,
+        portal_url,
+        portal_token,
+        ios,
+    )
     try:
         result = await driver.start_app(package)
         click.echo(result)

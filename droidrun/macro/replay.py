@@ -10,7 +10,8 @@ import logging
 from typing import Any, Dict, Optional
 
 from droidrun.agent.utils.trajectory import Trajectory
-from droidrun.tools.driver.android import AndroidDriver
+from droidrun.config_manager.config_manager import DeviceConfig
+from droidrun.tools.driver.factory import create_driver_from_device_config
 
 logger = logging.getLogger("droidrun-macro")
 
@@ -24,27 +25,59 @@ class MacroPlayer:
     A class for loading and replaying Droidrun macro sequences.
 
     This player can execute recorded UI actions (taps, swipes, text input, key presses)
-    on Android devices using AndroidDriver.
+    on Android devices using the configured backend.
     """
 
-    def __init__(self, device_serial: str = None, delay_between_actions: float = 1.0):
+    def __init__(
+        self,
+        device_serial: str = None,
+        delay_between_actions: float = 1.0,
+        driver_backend: str = "portal",
+        portal_mode: str = "direct",
+        portal_url: str | None = None,
+        portal_token: str | None = None,
+        auto_setup: bool = True,
+    ):
         """
         Initialize the MacroPlayer.
 
         Args:
             device_serial: Serial number of the target device. If None, will use first available device.
             delay_between_actions: Delay in seconds between each action (default: 1.0s)
+            driver_backend: Android driver backend to use for replay.
+            portal_mode: Portal connection mode when using the portal backend.
+            portal_url: Direct portal base URL for no-ADB macro replay.
+            portal_token: Direct portal auth token for no-ADB macro replay.
+            auto_setup: Whether to auto-setup Portal when ADB is in use.
         """
         self.device_serial = device_serial
         self.delay_between_actions = delay_between_actions
-        self.driver: AndroidDriver | None = None
+        self.driver_backend = driver_backend
+        self.portal_mode = portal_mode
+        self.portal_url = portal_url
+        self.portal_token = portal_token
+        self.auto_setup = auto_setup
+        self.driver = None
 
-    async def _initialize_driver(self) -> AndroidDriver:
-        """Initialize AndroidDriver for the target device."""
+    async def _initialize_driver(self):
+        """Initialize the configured device driver for the target device."""
         if self.driver is None:
-            self.driver = AndroidDriver(serial=self.device_serial)
-            await self.driver.connect()
-            logger.info(f"🤖 Initialized driver for device: {self.device_serial}")
+            device_config = DeviceConfig(
+                serial=self.device_serial,
+                platform="android",
+                driver_backend=self.driver_backend,
+                portal_connection_mode=self.portal_mode,
+                portal_url=self.portal_url,
+                portal_token=self.portal_token,
+                auto_setup=self.auto_setup,
+            )
+            self.driver, _ = await create_driver_from_device_config(
+                device_config,
+                debug=logger.isEnabledFor(logging.DEBUG),
+            )
+            logger.info(
+                f"🤖 Initialized {self.driver_backend} driver for device: {self.device_serial or self.portal_url}"
+            )
         return self.driver
 
     def load_macro_from_file(self, macro_file_path: str) -> Dict[str, Any]:
@@ -261,6 +294,11 @@ async def replay_macro_file(
     delay_between_actions: float = 1.0,
     start_from_step: int = 0,
     max_steps: Optional[int] = None,
+    driver_backend: str = "portal",
+    portal_mode: str = "direct",
+    portal_url: str | None = None,
+    portal_token: str | None = None,
+    auto_setup: bool = True,
 ) -> bool:
     """
     Convenience function to replay a macro from a file.
@@ -271,13 +309,24 @@ async def replay_macro_file(
         delay_between_actions: Delay between actions in seconds
         start_from_step: Step to start from (0-based)
         max_steps: Maximum steps to execute
+        driver_backend: Android driver backend to use.
+        portal_mode: Portal connection mode when using the portal backend.
+        portal_url: Direct portal base URL for no-ADB macro replay.
+        portal_token: Direct portal auth token for no-ADB macro replay.
+        auto_setup: Whether to auto-setup Portal when ADB is in use.
 
     Returns:
         True if replay was successful, False otherwise
     """
     # 教程注释：文件回放快捷入口，适合脚本或测试场景直接调用。
     player = MacroPlayer(
-        device_serial=device_serial, delay_between_actions=delay_between_actions
+        device_serial=device_serial,
+        delay_between_actions=delay_between_actions,
+        driver_backend=driver_backend,
+        portal_mode=portal_mode,
+        portal_url=portal_url,
+        portal_token=portal_token,
+        auto_setup=auto_setup,
     )
 
     try:
@@ -296,6 +345,11 @@ async def replay_macro_folder(
     delay_between_actions: float = 1.0,
     start_from_step: int = 0,
     max_steps: Optional[int] = None,
+    driver_backend: str = "portal",
+    portal_mode: str = "direct",
+    portal_url: str | None = None,
+    portal_token: str | None = None,
+    auto_setup: bool = True,
 ) -> bool:
     """
     Convenience function to replay a macro from a trajectory folder.
@@ -306,13 +360,24 @@ async def replay_macro_folder(
         delay_between_actions: Delay between actions in seconds
         start_from_step: Step to start from (0-based)
         max_steps: Maximum steps to execute
+        driver_backend: Android driver backend to use.
+        portal_mode: Portal connection mode when using the portal backend.
+        portal_url: Direct portal base URL for no-ADB macro replay.
+        portal_token: Direct portal auth token for no-ADB macro replay.
+        auto_setup: Whether to auto-setup Portal when ADB is in use.
 
     Returns:
         True if replay was successful, False otherwise
     """
     # 教程注释：目录回放快捷入口，自动读取轨迹目录中的 macro.json。
     player = MacroPlayer(
-        device_serial=device_serial, delay_between_actions=delay_between_actions
+        device_serial=device_serial,
+        delay_between_actions=delay_between_actions,
+        driver_backend=driver_backend,
+        portal_mode=portal_mode,
+        portal_url=portal_url,
+        portal_token=portal_token,
+        auto_setup=auto_setup,
     )
 
     try:

@@ -12,7 +12,6 @@ import os
 import traceback
 from typing import TYPE_CHECKING, Awaitable, Type, Union
 
-from async_adbutils import adb
 from llama_index.core.llms.llm import LLM
 from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step
 from opentelemetry import trace
@@ -68,16 +67,14 @@ from droidrun.log_handlers import CLILogHandler, configure_logging
 from droidrun.mcp.adapter import mcp_to_droidrun_tools
 from droidrun.mcp.client import MCPClientManager
 from droidrun.mcp.config import MCPConfig
-from droidrun.portal import ensure_portal_ready
 from droidrun.telemetry import (
     DroidAgentFinalizeEvent,
     DroidAgentInitEvent,
     capture,
     flush,
 )
-from droidrun.tools.driver.android import AndroidDriver
 from droidrun.tools.driver.base import DeviceDisconnectedError
-from droidrun.tools.driver.ios import IOSDriver, discover_ios_portal
+from droidrun.tools.driver.factory import create_driver_from_device_config
 from droidrun.tools.driver.recording import RecordingDriver
 from droidrun.tools.driver.stealth import StealthDriver
 from droidrun.tools.filters import ConciseFilter, DetailedFilter
@@ -415,36 +412,16 @@ class DroidAgent(Workflow):
         else:
             vision_enabled = self.config.agent.fast_agent.vision
 
-        is_ios = self.resolved_device_config.platform.lower() == "ios"
-
         # 语法/业务: 支持注入 `driver`（用于测试），否则根据平台实例化对应驱动（iOS/Android）。
         if self._injected_driver is not None:
             driver = self._injected_driver
-        elif is_ios:
-            ios_url = self.resolved_device_config.serial
-            if not ios_url:
-                ios_url = await discover_ios_portal()
-            driver = IOSDriver(url=ios_url)
-            await driver.connect()
         else:
-            device_serial = self.resolved_device_config.serial
-            if device_serial is None:
-                devices = await adb.list()
-                if not devices:
-                    raise ValueError("No connected Android devices found.")
-                device_serial = devices[0].serial
-
-            # Auto-setup portal if enabled
-            if self.config.device.auto_setup:
-                device_obj = await adb.device(serial=device_serial)
-                await ensure_portal_ready(device_obj, debug=self.config.logging.debug)
-
-            driver = AndroidDriver(
-                serial=device_serial,
-                use_tcp=self.resolved_device_config.use_tcp,
+            driver, _ = await create_driver_from_device_config(
+                self.resolved_device_config,
+                debug=self.config.logging.debug,
             )
-            # 语法: `await driver.connect()` 异步连接设备，必要时会抛出异常。
-            await driver.connect()
+
+        is_ios = driver.platform.lower() == "ios"
 
         # Wrap with StealthDriver if stealth mode enabled
         # 业务: 当启用 stealth 功能时，使用 `StealthDriver` 包装底层驱动以隐藏自动化痕迹。

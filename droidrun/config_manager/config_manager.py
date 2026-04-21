@@ -144,6 +144,11 @@ class DeviceConfig:
     serial: Optional[str] = None
     use_tcp: bool = False
     platform: str = "android"  # "android" or "ios"
+    driver_backend: str = "portal"  # "portal" or "adb"
+    portal_connection_mode: str = "direct"  # "direct" or "reverse"
+    portal_url: Optional[str] = None
+    portal_token: Optional[str] = None
+    portal_timeout: float = 10.0
     auto_setup: bool = True  # auto-install/fix portal before each run
 
 

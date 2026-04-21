@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from async_adbutils import AdbDevice
@@ -18,6 +19,32 @@ from async_adbutils import AdbDevice
 logger = logging.getLogger("droidrun")
 
 PORTAL_REMOTE_PORT = 8080  # Port on device where Portal HTTP server runs
+
+
+def validate_android_portal_url(
+    url: str,
+    default_port: int = PORTAL_REMOTE_PORT,
+) -> str:
+    """Validate and normalize an Android portal base URL."""
+    normalized = url.strip().rstrip("/")
+    if not normalized:
+        raise ValueError(
+            "Android portal URL cannot be empty. Provide a host[:port] or http(s) URL."
+        )
+
+    if "://" not in normalized:
+        normalized = f"http://{normalized}"
+
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(
+            "Android portal URL must be a valid http(s) URL, e.g. http://192.168.1.10:8080"
+        )
+
+    host = parsed.hostname
+    port = parsed.port or default_port
+    path = parsed.path.rstrip("/")
+    return urlunparse((parsed.scheme, f"{host}:{port}", path, "", "", ""))
 
 
 class PortalClient:
@@ -43,23 +70,34 @@ class PortalClient:
 
     # 教程注释：PortalClient 是 Android 通信总入口，对上层提供“统一方法 + 自动通道回退”。
 
-    def __init__(self, device: AdbDevice, prefer_tcp: bool = False):
+    def __init__(
+        self,
+        device: AdbDevice | None = None,
+        prefer_tcp: bool = False,
+        base_url: str | None = None,
+        auth_token: str | None = None,
+        timeout: float = 10.0,
+    ):
         """
         Initialize Portal client.
 
         Args:
-            device: ADB device instance
+            device: Optional ADB device instance
             prefer_tcp: Whether to prefer TCP communication (will fallback to content provider if unavailable)
+            base_url: Direct portal base URL for no-ADB mode
+            auth_token: Direct portal auth token for HTTP requests
+            timeout: Default HTTP timeout in seconds
 
         Note:
             Call `await client.connect()` after initialization to establish connection.
         """
         self.device = device
-        self.prefer_tcp = prefer_tcp
+        self.prefer_tcp = prefer_tcp or base_url is not None
         self.tcp_available = False
-        self.tcp_base_url = None
+        self.tcp_base_url = validate_android_portal_url(base_url) if base_url else None
         self.local_tcp_port = None
-        self._auth_token: Optional[str] = None
+        self._auth_token: Optional[str] = auth_token
+        self._timeout = timeout
         self._connected = False
 
     async def connect(self) -> None:
@@ -67,6 +105,16 @@ class PortalClient:
         Establish connection...
         """
         if self._connected:
+            return
+
+        if self.tcp_base_url is not None:
+            if not await self._test_connection():
+                raise ConnectionError(
+                    f"Could not connect to Android portal at {self.tcp_base_url}. "
+                    "Make sure the Portal HTTP server is enabled and reachable."
+                )
+            self.tcp_available = True
+            self._connected = True
             return
 
         if self.prefer_tcp:
@@ -89,6 +137,9 @@ class PortalClient:
         Returns:
             The auth token string, or None if unavailable.
         """
+        if self.device is None:
+            return self._auth_token
+
         try:
             output = await self.device.shell(
                 "content query --uri content://com.droidrun.portal/auth_token"
@@ -210,6 +261,9 @@ class PortalClient:
         Returns:
             Local port number if forward exists, None otherwise
         """
+        if self.device is None:
+            return None
+
         try:
             forwards = []
             async for forward in self.device.forward_list():
@@ -271,6 +325,104 @@ class PortalClient:
                 response = await client.request(method, url, headers=headers, **kwargs)
 
         return response
+
+    @staticmethod
+    def _unwrap_tcp_payload(data: Any) -> Any:
+        """Unwrap the standard ApiResponse envelope returned by Portal HTTP."""
+        if isinstance(data, dict):
+            if data.get("status") == "error":
+                raise ConnectionError(data.get("error") or data.get("message") or str(data))
+
+            inner_key = (
+                "result"
+                if "result" in data
+                else "data" if "data" in data else None
+            )
+            if inner_key is not None:
+                return data[inner_key]
+
+        return data
+
+    async def _request_json_tcp(
+        self,
+        method: str,
+        path: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """Perform a JSON HTTP request against the Portal TCP endpoint."""
+        await self._ensure_connected()
+        if not self.tcp_available or not self.tcp_base_url:
+            raise ConnectionError("Portal HTTP server is not available")
+
+        kwargs: Dict[str, Any] = {}
+        extra_headers: Optional[Dict[str, str]] = None
+        if payload is not None:
+            kwargs["json"] = payload
+            extra_headers = {"Content-Type": "application/json"}
+
+        async with httpx.AsyncClient() as client:
+            response = await self._tcp_request(
+                client,
+                method,
+                f"{self.tcp_base_url}{path}",
+                extra_headers=extra_headers,
+                timeout=timeout or self._timeout,
+                **kwargs,
+            )
+
+        if response.status_code != 200:
+            raise ConnectionError(
+                f"Portal request failed for {path}: HTTP {response.status_code}: {response.text}"
+            )
+
+        try:
+            data = response.json() if response.content else {}
+        except Exception as exc:
+            raise ConnectionError(
+                f"Portal returned a non-JSON response for {path}"
+            ) from exc
+
+        return self._unwrap_tcp_payload(data)
+
+    async def _request_binary_tcp(
+        self,
+        path: str,
+        timeout: Optional[float] = None,
+    ) -> bytes:
+        """Perform a binary GET request against the Portal TCP endpoint."""
+        await self._ensure_connected()
+        if not self.tcp_available or not self.tcp_base_url:
+            raise ConnectionError("Portal HTTP server is not available")
+
+        async with httpx.AsyncClient() as client:
+            response = await self._tcp_request(
+                client,
+                "GET",
+                f"{self.tcp_base_url}{path}",
+                timeout=timeout or self._timeout,
+            )
+
+        if response.status_code != 200:
+            raise ConnectionError(
+                f"Portal request failed for {path}: HTTP {response.status_code}: {response.text}"
+            )
+
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("image/"):
+            return response.content
+
+        try:
+            data = response.json() if response.content else {}
+            payload = self._unwrap_tcp_payload(data)
+            if isinstance(payload, str):
+                return base64.b64decode(payload)
+        except Exception as exc:
+            raise ConnectionError(
+                f"Portal returned an unexpected binary response for {path}"
+            ) from exc
+
+        raise ConnectionError(f"Portal did not return binary data for {path}")
 
     async def _test_connection(self) -> bool:
         """Test if TCP connection to Portal is working (with auth)."""
@@ -358,37 +510,15 @@ class PortalClient:
     async def _get_state_tcp(self) -> Dict[str, Any]:
         """Get state via TCP."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await self._tcp_request(
-                    client, "GET", f"{self.tcp_base_url}/state_full", timeout=10
-                )
-                if response.status_code == 200:
-                    data = response.json()
-
-                    # Handle nested "result" or "data" field (backward compatible)
-                    if isinstance(data, dict):
-                        # Check for 'result' first (new portal format), then 'data' (legacy)
-                        inner_key = (
-                            "result"
-                            if "result" in data
-                            else "data" if "data" in data else None
-                        )
-                        if inner_key:
-                            inner_value = data[inner_key]
-                            if isinstance(inner_value, str):
-                                try:
-                                    return json.loads(inner_value)
-                                except json.JSONDecodeError:
-                                    pass
-                            elif isinstance(inner_value, dict):
-                                return inner_value
-                    return data
-                else:
-                    logger.debug(
-                        f"TCP get_state failed ({response.status_code}), using fallback"
-                    )
-                    return await self._get_state_content_provider()
+            data = await self._request_json_tcp("GET", "/state_full", timeout=10)
+            if isinstance(data, str):
+                return json.loads(data)
+            if isinstance(data, dict):
+                return data
+            raise ConnectionError(f"Unexpected state payload type: {type(data).__name__}")
         except Exception as e:
+            if self.device is None:
+                raise ConnectionError(f"Portal state request failed: {e}") from e
             logger.debug(f"TCP get_state error: {e}, using fallback")
             return await self._get_state_content_provider()
 
@@ -455,24 +585,13 @@ class PortalClient:
         try:
             encoded = base64.b64encode(text.encode()).decode()
             payload = {"base64_text": encoded, "clear": clear}
-            async with httpx.AsyncClient() as client:
-                response = await self._tcp_request(
-                    client,
-                    "POST",
-                    f"{self.tcp_base_url}/keyboard/input",
-                    extra_headers={"Content-Type": "application/json"},
-                    json=payload,
-                    timeout=10,
-                )
-                if response.status_code == 200:
-                    logger.debug("TCP input_text successful")
-                    return True
-                else:
-                    logger.debug(
-                        f"TCP input_text failed ({response.status_code}), using fallback"
-                    )
-                    return await self._input_text_content_provider(text, clear)
+            await self._request_json_tcp("POST", "/keyboard/input", payload, timeout=10)
+            logger.debug("TCP input_text successful")
+            return True
         except Exception as e:
+            if self.device is None:
+                logger.debug(f"TCP input_text error in direct mode: {e}")
+                return False
             logger.debug(f"TCP input_text error: {e}, using fallback")
             return await self._input_text_content_provider(text, clear)
 
@@ -513,34 +632,12 @@ class PortalClient:
     async def _take_screenshot_tcp(self, hide_overlay: bool) -> bytes:
         """Take screenshot via TCP."""
         try:
-            url = f"{self.tcp_base_url}/screenshot"
-            if not hide_overlay:
-                url += "?hideOverlay=false"
-
-            async with httpx.AsyncClient() as client:
-                response = await self._tcp_request(client, "GET", url, timeout=10.0)
-                if response.status_code == 200:
-                    data = response.json()
-                    # Check for 'result' first (new portal format), then 'data' (legacy)
-                    if data.get("status") == "success":
-                        inner_key = (
-                            "result"
-                            if "result" in data
-                            else "data" if "data" in data else None
-                        )
-                        if inner_key:
-                            logger.debug("Screenshot taken via TCP")
-                            return base64.b64decode(data[inner_key])
-                    logger.debug(
-                        "TCP screenshot failed (invalid response), using fallback"
-                    )
-                    return await self._take_screenshot_adb()
-                else:
-                    logger.debug(
-                        f"TCP screenshot failed ({response.status_code}), using fallback"
-                    )
-                    return await self._take_screenshot_adb()
+            path = "/screenshot" if hide_overlay else "/screenshot?hideOverlay=false"
+            logger.debug("Screenshot taken via TCP")
+            return await self._request_binary_tcp(path, timeout=10.0)
         except Exception as e:
+            if self.device is None:
+                raise ConnectionError(f"TCP screenshot failed in direct mode: {e}") from e
             logger.debug(f"TCP screenshot error: {e}, using fallback")
             return await self._take_screenshot_adb()
 
@@ -564,13 +661,17 @@ class PortalClient:
         """
         await self._ensure_connected()
         try:
-            logger.debug("Getting apps via content provider")
-
-            # Query content provider
-            output = await self.device.shell(
-                "content query --uri content://com.droidrun.portal/packages"
-            )
-            packages_data = self._parse_content_provider_output(output)
+            if self.tcp_available:
+                logger.debug("Getting apps via TCP")
+                packages_data = await self._request_json_tcp("GET", "/packages", timeout=10)
+            elif self.device is not None:
+                logger.debug("Getting apps via content provider")
+                output = await self.device.shell(
+                    "content query --uri content://com.droidrun.portal/packages"
+                )
+                packages_data = self._parse_content_provider_output(output)
+            else:
+                raise ConnectionError("Portal apps endpoint is not available")
 
             if not packages_data:
                 logger.warning("No packages data found in content provider response")
@@ -632,25 +733,13 @@ class PortalClient:
         await self._ensure_connected()
         if self.tcp_available:
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await self._tcp_request(
-                        client, "GET", f"{self.tcp_base_url}/version", timeout=5.0
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        # Check for 'result' first (new portal format), then 'data' (legacy)
-                        inner_key = (
-                            "result"
-                            if "result" in data
-                            else "data" if "data" in data else None
-                        )
-                        if inner_key:
-                            return data[inner_key]
-                        return data.get("status", "unknown")
+                return str(await self._request_json_tcp("GET", "/version", timeout=5.0))
             except Exception:
                 pass
 
         # Fallback to content provider
+        if self.device is None:
+            return "unknown"
         try:
             output = await self.device.shell(
                 "content query --uri content://com.droidrun.portal/version"
@@ -669,6 +758,79 @@ class PortalClient:
             pass
 
         return "unknown"
+
+    async def get_time(self) -> str:
+        """Get Portal time endpoint as a string."""
+        result = await self._request_json_tcp("POST", "/time", {}, timeout=5.0)
+        return str(result)
+
+    async def tap(self, x: int, y: int) -> None:
+        """Perform a tap through the Portal action endpoint."""
+        await self._request_json_tcp("POST", "/tap", {"x": x, "y": y}, timeout=10.0)
+
+    async def swipe(
+        self,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        duration_ms: float = 1000,
+    ) -> None:
+        """Perform a swipe through the Portal action endpoint."""
+        await self._request_json_tcp(
+            "POST",
+            "/swipe",
+            {
+                "startX": start_x,
+                "startY": start_y,
+                "endX": end_x,
+                "endY": end_y,
+                "duration": int(duration_ms),
+            },
+            timeout=max(10.0, duration_ms / 1000 + 2),
+        )
+
+    async def perform_global_action(self, action: int) -> Any:
+        """Perform an accessibility global action through Portal."""
+        return await self._request_json_tcp(
+            "POST",
+            "/global",
+            {"action": action},
+            timeout=10.0,
+        )
+
+    async def press_key(self, key_code: int) -> Any:
+        """Dispatch a keyboard key event through Portal."""
+        return await self._request_json_tcp(
+            "POST",
+            "/keyboard/key",
+            {"key_code": key_code},
+            timeout=10.0,
+        )
+
+    async def start_app(
+        self,
+        package: str,
+        activity: Optional[str] = None,
+        stop_before_launch: bool = False,
+    ) -> Any:
+        """Start an app through the Portal action endpoint."""
+        payload: Dict[str, Any] = {
+            "package": package,
+            "stopBeforeLaunch": stop_before_launch,
+        }
+        if activity:
+            payload["activity"] = activity
+        return await self._request_json_tcp("POST", "/app", payload, timeout=10.0)
+
+    async def stop_app(self, package: str) -> Any:
+        """Stop an app through the Portal action endpoint."""
+        return await self._request_json_tcp(
+            "POST",
+            "/app/stop",
+            {"package": package},
+            timeout=10.0,
+        )
 
     async def ping(self) -> Dict[str, Any]:
         """

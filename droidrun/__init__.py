@@ -45,7 +45,7 @@ from droidrun.config_manager import (
 
 # Import macro functionality
 from droidrun.macro import MacroPlayer, replay_macro_file, replay_macro_folder
-from droidrun.tools import AndroidDriver, DeviceDriver, RecordingDriver
+from droidrun.tools import AndroidDriver, DeviceDriver, PortalDriver, RecordingDriver
 
 
 # 教程注释：__all__ 决定了这个包对外公开的“主接口清单”，相当于给 SDK 用户准备的官方入口表。
@@ -58,6 +58,7 @@ __all__ = [
     # Tools / Drivers
     "DeviceDriver",
     "AndroidDriver",
+    "PortalDriver",
     "RecordingDriver",
     # Macro
     "MacroPlayer",

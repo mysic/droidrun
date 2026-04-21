@@ -166,8 +166,9 @@ class AndroidStateProvider(StateProvider):
         """Restart Portal's accessibility service and TCP socket server."""
         # 教程注释：这是状态抓取失败后的自愈钩子，尝试重启无障碍与 TCP 通道再继续重试。
         from droidrun.tools.driver.android import AndroidDriver
+        from droidrun.tools.driver.portal import PortalDriver
 
-        if not isinstance(self.driver, AndroidDriver):
+        if not isinstance(self.driver, (AndroidDriver, PortalDriver)):
             return
         device = self.driver.device
         if device is None:
