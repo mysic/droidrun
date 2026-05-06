@@ -43,6 +43,11 @@ General:
 6. Make sure names and titles are not cutoff. If the request is to check who sent a message, make sure to check the message sender's full name not just what appears in the notification because it might be cut off.
 7. Dates and file names must match the user query exactly.
 8. Don't do more than what the user asks for.
+9. For target interaction, enforce this order in plan:
+	a) Find target in UI tree first.
+	b) If not found, require screenshot analysis.
+	c) Use coordinate action (`click_at`) for screenshot-derived target positions.
+10. If UI tree does not contain the target, do NOT ask executor to click unrelated tabs/buttons just to "check".
 Memory Usage:
 - Always include step context: "At step [number], I obtained [actual content] from [source]"
 - Store the actual content you observe, not just references (e.g., store full recipe text, not "found recipes")

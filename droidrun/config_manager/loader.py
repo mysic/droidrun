@@ -75,6 +75,26 @@ class ConfigLoader:
         return cls._init_user_config()
 
     @classmethod
+    def get_active_config_path(cls, config_path: Optional[str] = None) -> Path:
+        """Resolve which config path is active under current precedence rules."""
+        if config_path:
+            return Path(config_path)
+
+        env_config = os.environ.get("DROIDRUN_CONFIG")
+        if env_config and Path(env_config).exists():
+            return Path(env_config)
+
+        project_config_path = cls.get_project_config_path()
+        if project_config_path.exists():
+            return project_config_path
+
+        user_config_path = cls.get_user_config_path()
+        if user_config_path.exists():
+            return user_config_path
+
+        return user_config_path
+
+    @classmethod
     def _load_user_config(cls, user_config_path: Path) -> DroidConfig:
         """Load user config and run migrations."""
         # 教程注释：加载后会先执行迁移，再在版本升级时自动回写新结构，减少手工维护成本。
@@ -111,9 +131,52 @@ class ConfigLoader:
         return cls._save_dict(config_dict, cls.get_user_config_path())
 
     @classmethod
+    def save_to_path(cls, config: DroidConfig, path: Path) -> Path:
+        """Save config to an explicit path."""
+        config_dict = config.to_dict()
+        config_dict["_version"] = CURRENT_VERSION
+        return cls._save_dict(config_dict, path)
+
+    @classmethod
     def _save_dict(cls, config_dict: Dict[str, Any], path: Path) -> Path:
-        """Save config dict to path."""
+        """Save config dict to path, preserving comments when possible."""
         path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Try round-trip YAML updates first so existing comments are preserved.
+        try:
+            from ruamel.yaml import YAML  # type: ignore[import-not-found]
+
+            yaml_rt = YAML()
+            yaml_rt.preserve_quotes = True
+            yaml_rt.indent(mapping=2, sequence=4, offset=2)
+
+            existing: Dict[str, Any] = {}
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded = yaml_rt.load(f)
+                    if isinstance(loaded, dict):
+                        existing = loaded
+
+            merged = cls._merge_nested(existing, config_dict)
+            with open(path, "w", encoding="utf-8") as f:
+                yaml_rt.dump(merged, f)
+            return path
+        except Exception:
+            # Fallback to plain YAML dump if ruamel is unavailable.
+            pass
+
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
         return path
+
+    @staticmethod
+    def _merge_nested(existing: Any, incoming: Any) -> Any:
+        """Recursively merge incoming values into existing structure."""
+        if isinstance(existing, dict) and isinstance(incoming, dict):
+            for key, value in incoming.items():
+                if key in existing:
+                    existing[key] = ConfigLoader._merge_nested(existing[key], value)
+                else:
+                    existing[key] = value
+            return existing
+        return incoming

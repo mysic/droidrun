@@ -761,8 +761,41 @@ class PortalClient:
 
     async def get_time(self) -> str:
         """Get Portal time endpoint as a string."""
-        result = await self._request_json_tcp("POST", "/time", {}, timeout=5.0)
-        return str(result)
+        await self._ensure_connected()
+
+        if self.tcp_available:
+            try:
+                result = await self._request_json_tcp("POST", "/time", {}, timeout=5.0)
+                return str(result)
+            except Exception as e:
+                if self.device is None:
+                    raise ConnectionError(
+                        f"Portal time endpoint is not available: {e}"
+                    ) from e
+                logger.debug(f"TCP get_time error: {e}, using fallback")
+
+        if self.device is not None:
+            # Fallback 1: content provider time endpoint.
+            try:
+                output = await self.device.shell(
+                    "content query --uri content://com.droidrun.portal/time"
+                )
+                result = self._parse_content_provider_output(output)
+                if result is not None:
+                    return str(result)
+            except Exception as e:
+                logger.debug(f"Content provider get_time error: {e}")
+
+            # Fallback 2: device shell date command.
+            try:
+                output = await self.device.shell('date "+%Y-%m-%d %H:%M:%S"')
+                value = (output or "").strip().splitlines()[-1].strip()
+                if value:
+                    return value
+            except Exception as e:
+                logger.debug(f"Shell date fallback error: {e}")
+
+        raise ConnectionError("Portal HTTP server is not available")
 
     async def tap(self, x: int, y: int) -> None:
         """Perform a tap through the Portal action endpoint."""

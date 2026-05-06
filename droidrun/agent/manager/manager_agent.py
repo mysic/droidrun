@@ -14,6 +14,7 @@ import copy
 import json
 import logging
 import os
+import re
 from typing import TYPE_CHECKING, Optional, Type
 
 from llama_index.core.base.llms.types import (
@@ -304,6 +305,64 @@ class ManagerAgent(Workflow):
         messages = filter_empty_messages(messages)
         return messages
 
+    def _extract_required_targets(self, text: str) -> list[str]:
+        """Extract explicit target texts from the user instruction."""
+        if not text:
+            return []
+
+        matches = re.findall(r'[“"\']([^”"\']{1,20})[”"\']', text)
+        targets: list[str] = []
+        for match in matches:
+            candidate = match.strip()
+            if candidate and candidate not in targets:
+                targets.append(candidate)
+        return targets
+
+    def _ui_contains_target(self, target: str) -> bool:
+        """Return whether current UI state already exposes the target text."""
+        if not target:
+            return False
+
+        if target in (self.shared_state.formatted_device_state or ""):
+            return True
+
+        def _contains(elements) -> bool:
+            for element in elements or []:
+                text = str(element.get("text", "") or "")
+                if target in text:
+                    return True
+                if _contains(element.get("children", []) or []):
+                    return True
+            return False
+
+        return _contains(self.shared_state.a11y_tree)
+
+    def _plan_requires_screenshot_grounding(self, parsed: dict) -> Optional[str]:
+        """Validate that missing targets trigger screenshot analysis first."""
+        targets = self._extract_required_targets(self.shared_state.instruction)
+        if not targets:
+            return None
+
+        current_subgoal = (parsed.get("current_subgoal") or "").strip()
+        plan_text = (parsed.get("plan") or "").strip()
+        combined = f"{current_subgoal}\n{plan_text}"
+        screenshot_markers = ["截图", "分析截图", "click_at", "坐标"]
+
+        for target in targets:
+            if self._ui_contains_target(target):
+                continue
+
+            if any(marker in combined for marker in screenshot_markers):
+                continue
+
+            return (
+                f"The required target '{target}' is not present in the current UI tree. "
+                "You must first analyze the screenshot and plan a coordinate click using click_at. "
+                "Do not plan clicking unrelated tabs/buttons or swiping as a fallback before screenshot analysis."
+            )
+
+        return None
+
     async def _validate_and_retry(
         self, messages: list[ChatMessage], initial_response: str
     ) -> str:
@@ -339,7 +398,9 @@ class ManagerAgent(Workflow):
                     "Please provide a plan with the correct format."
                 )
             else:
-                break  # Valid: plan without answer
+                error_message = self._plan_requires_screenshot_grounding(parsed)
+                if error_message is None:
+                    break  # Valid: plan without answer
 
             if error_message:
                 retry_count += 1

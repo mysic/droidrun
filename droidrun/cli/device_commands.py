@@ -7,22 +7,42 @@ and talk directly to the device driver.
 import asyncio
 import os
 import tempfile
+from io import BytesIO
 from dataclasses import dataclass
 from functools import wraps
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import click
+from PIL import Image, ImageDraw
 from rich.console import Console
 
 from droidrun.config_manager import ConfigLoader
-from droidrun.tools.helpers.coordinate import NORMALIZED_MAX, to_absolute
+from droidrun.tools.helpers.coordinate import NORMALIZED_MAX, to_absolute, to_normalized
 from droidrun.tools.driver.factory import create_driver_from_device_config
 from droidrun.tools.filters import ConciseFilter
 from droidrun.tools.formatters import IndexedFormatter
 from droidrun.tools.ui.ios_provider import IOSStateProvider
 from droidrun.tools.ui.provider import AndroidStateProvider
+from droidrun.tools.ui.state import UIState
 
 console = Console()
+
+
+def _save_marked_screenshot(png: bytes, source_path: str, x: int, y: int) -> str:
+    """Save a copy of the screenshot with the resolved point highlighted."""
+    base, ext = os.path.splitext(source_path)
+    marked_path = f"{base}_marked{ext or '.png'}"
+
+    image = Image.open(BytesIO(png)).convert("RGBA")
+    draw = ImageDraw.Draw(image)
+    radius = 20
+    draw.ellipse(
+        (x - radius, y - radius, x + radius, y + radius),
+        outline="red",
+        width=5,
+    )
+    image.save(marked_path)
+    return marked_path
 
 
 @dataclass
@@ -32,9 +52,15 @@ class DeviceCommandContext:
     use_normalized_coordinates: bool
     screen_width: Optional[int]
     screen_height: Optional[int]
+    ui_state: Optional[UIState] = None
 
     def convert_point(self, x: int, y: int) -> tuple[int, int]:
-        """Convert UI-tree [0-1000] coordinate to absolute pixel if enabled."""
+        """Resolve input coordinates to absolute device pixels.
+
+        In normalized mode, [0-1000] values are treated as UI-tree normalized.
+        If values exceed [0-1000] but fit current screen bounds, treat them as
+        absolute pixel coordinates for compatibility with screenshot/device inputs.
+        """
         if not self.use_normalized_coordinates:
             return x, y
 
@@ -44,41 +70,148 @@ class DeviceCommandContext:
                 "is unavailable. Please ensure UI state is accessible."
             )
 
-        if not (0 <= x <= NORMALIZED_MAX and 0 <= y <= NORMALIZED_MAX):
-            raise click.ClickException(
-                f"Coordinates ({x}, {y}) are out of normalized range [0, {NORMALIZED_MAX}]."
+        if 0 <= x <= NORMALIZED_MAX and 0 <= y <= NORMALIZED_MAX:
+            return to_absolute(x, y, self.screen_width, self.screen_height)
+
+        if 0 <= x <= self.screen_width and 0 <= y <= self.screen_height:
+            return x, y
+
+        raise click.ClickException(
+            f"Coordinates ({x}, {y}) are neither normalized [0, {NORMALIZED_MAX}] "
+            f"nor absolute screen pixels [0, {self.screen_width}] x [0, {self.screen_height}]."
+        )
+
+    @staticmethod
+    def _iter_elements(elements: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Flatten UI elements recursively for point hit-testing."""
+        result: List[Dict[str, Any]] = []
+        for item in elements:
+            result.append(item)
+            children = item.get("children", []) or []
+            if children:
+                result.extend(DeviceCommandContext._iter_elements(children))
+        return result
+
+    def _find_element_by_point(self, x: int, y: int) -> Optional[Dict[str, Any]]:
+        """Find the top-most UI element containing absolute point (x, y)."""
+        if not self.ui_state:
+            return None
+
+        point_x, point_y = x, y
+        if (
+            self.use_normalized_coordinates
+            and self.screen_width is not None
+            and self.screen_height is not None
+        ):
+            point_x, point_y = to_normalized(x, y, self.screen_width, self.screen_height)
+
+        hit: Optional[Dict[str, Any]] = None
+        for element in self._iter_elements(self.ui_state.elements):
+            bounds = element.get("bounds")
+            if not bounds:
+                continue
+            try:
+                left, top, right, bottom = map(int, bounds.split(","))
+            except Exception:
+                continue
+            if left <= point_x <= right and top <= point_y <= bottom:
+                # Later elements tend to be visually on top in this flattened list.
+                hit = element
+        return hit
+
+    async def resolve_action_point(
+        self,
+        driver,
+        x: int,
+        y: int,
+        action_name: str,
+    ) -> tuple[int, int]:
+        """Resolve a command point via UI tree first, with screenshot fallback."""
+        abs_x, abs_y = self.convert_point(x, y)
+        hit = self._find_element_by_point(abs_x, abs_y)
+        if hit is not None:
+            idx = hit.get("index", "?")
+            text = hit.get("text", "")
+            class_name = hit.get("className", "Unknown")
+            click.echo(
+                f"[{action_name}] UI hit index={idx}, class={class_name}, text={text!r}, point=({abs_x}, {abs_y})"
+            )
+            return abs_x, abs_y
+
+        # Fallback: no element hit in UI tree -> capture screenshot for analysis.
+        fd, path = tempfile.mkstemp(prefix="droidrun_fallback_", suffix=".png")
+        try:
+            png = await driver.screenshot()
+            try:
+                os.write(fd, png)
+            finally:
+                os.close(fd)
+            marked_path = _save_marked_screenshot(png, path, abs_x, abs_y)
+            click.echo(
+                f"[{action_name}] No matching element in UI tree for point ({abs_x}, {abs_y}). "
+                f"Fallback screenshot saved: {path}; marked screenshot saved: {marked_path}",
+                err=True,
+            )
+        except Exception as exc:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+            click.echo(
+                f"[{action_name}] No UI element match and screenshot fallback failed: {exc}",
+                err=True,
             )
 
-        return to_absolute(x, y, self.screen_width, self.screen_height)
+        return abs_x, abs_y
 
 
 async def _prepare_device_command_context(
     driver,
+    is_ios: bool,
     use_normalized_coordinates: bool,
 ) -> DeviceCommandContext:
-    """Run per-command preflight and read real device resolution."""
+    """Run per-command preflight and read real device resolution/UI state."""
     screen_width: Optional[int] = None
     screen_height: Optional[int] = None
+    ui_state: Optional[UIState] = None
 
     try:
-        state = await driver.get_ui_tree()
-        if isinstance(state, dict):
-            screen_bounds = state.get("device_context", {}).get("screen_bounds", {})
-            width = screen_bounds.get("width")
-            height = screen_bounds.get("height")
-            if width is not None and height is not None:
-                screen_width = int(width)
-                screen_height = int(height)
+        if is_ios:
+            provider = IOSStateProvider(driver, use_normalized=use_normalized_coordinates)
+        else:
+            provider = AndroidStateProvider(
+                driver,
+                tree_filter=ConciseFilter(),
+                tree_formatter=IndexedFormatter(),
+                use_normalized=use_normalized_coordinates,
+            )
+        ui_state = await provider.get_state()
+        screen_width = int(ui_state.screen_width)
+        screen_height = int(ui_state.screen_height)
     except Exception as exc:
         click.echo(
-            f"Warning: failed to resolve device resolution in preflight: {exc}",
+            f"Warning: failed to resolve UI state in preflight: {exc}",
             err=True,
         )
+
+        # Best-effort fallback: still try raw state for screen bounds.
+        try:
+            state = await driver.get_ui_tree()
+            if isinstance(state, dict):
+                screen_bounds = state.get("device_context", {}).get("screen_bounds", {})
+                width = screen_bounds.get("width")
+                height = screen_bounds.get("height")
+                if width is not None and height is not None:
+                    screen_width = int(width)
+                    screen_height = int(height)
+        except Exception:
+            pass
 
     return DeviceCommandContext(
         use_normalized_coordinates=use_normalized_coordinates,
         screen_width=screen_width,
         screen_height=screen_height,
+        ui_state=ui_state,
     )
 
 
@@ -163,6 +296,7 @@ async def _create_driver(
         )
         context = await _prepare_device_command_context(
             driver,
+            is_ios,
             use_normalized_coordinates,
         )
         return driver, is_ios, context
@@ -285,7 +419,7 @@ async def tap(x, y, device, config_path, tcp, driver_backend, portal_mode, porta
         ios,
     )
     try:
-        tap_x, tap_y = context.convert_point(x, y)
+        tap_x, tap_y = await context.resolve_action_point(driver, x, y, "tap")
         await driver.tap(tap_x, tap_y)
         if context.use_normalized_coordinates:
             click.echo(f"Tapped normalized ({x}, {y}) -> device ({tap_x}, {tap_y})")
@@ -322,8 +456,8 @@ async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, driver_b
         ios,
     )
     try:
-        abs_x1, abs_y1 = context.convert_point(x1, y1)
-        abs_x2, abs_y2 = context.convert_point(x2, y2)
+        abs_x1, abs_y1 = await context.resolve_action_point(driver, x1, y1, "swipe:start")
+        abs_x2, abs_y2 = await context.resolve_action_point(driver, x2, y2, "swipe:end")
         await driver.swipe(abs_x1, abs_y1, abs_x2, abs_y2, duration_ms=duration * 1000)
         if context.use_normalized_coordinates:
             click.echo(
@@ -360,7 +494,7 @@ async def long_press(x, y, device, config_path, tcp, driver_backend, portal_mode
         ios,
     )
     try:
-        abs_x, abs_y = context.convert_point(x, y)
+        abs_x, abs_y = await context.resolve_action_point(driver, x, y, "long-press")
         await driver.swipe(abs_x, abs_y, abs_x, abs_y, 1000)
         if context.use_normalized_coordinates:
             click.echo(

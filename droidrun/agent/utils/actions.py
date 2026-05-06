@@ -18,6 +18,12 @@ from droidrun.agent.oneflows.app_starter_workflow import AppStarter
 logger = logging.getLogger("droidrun")
 
 
+def _resolve_element_point(ctx: "ActionContext", index: int) -> tuple[int, int]:
+    """Resolve an element center to executable device coordinates."""
+    x, y = ctx.ui.get_element_coords(index)
+    return ctx.ui.convert_point(x, y)
+
+
 # ---------------------------------------------------------------------------
 # Core UI actions
 # ---------------------------------------------------------------------------
@@ -27,8 +33,8 @@ logger = logging.getLogger("droidrun")
 async def click(index: int, *, ctx: "ActionContext") -> ActionResult:
     """Click the element with the given index."""
     try:
-        x, y = ctx.ui.get_element_coords(index)
-        await ctx.driver.tap(x, y)
+        abs_x, abs_y = _resolve_element_point(ctx, index)
+        await ctx.driver.tap(abs_x, abs_y)
 
         info = ctx.ui.get_element_info(index)
         detail_parts = [
@@ -38,7 +44,7 @@ async def click(index: int, *, ctx: "ActionContext") -> ActionResult:
         ]
         if info.get("child_texts"):
             detail_parts.append(f"Contains text: {' | '.join(info['child_texts'])}")
-        detail_parts.append(f"Coordinates: ({x}, {y})")
+        detail_parts.append(f"Coordinates: ({abs_x}, {abs_y})")
 
         return ActionResult(
             success=True, summary=f"Clicked on {' | '.join(detail_parts)}"
@@ -52,10 +58,11 @@ async def click(index: int, *, ctx: "ActionContext") -> ActionResult:
 async def long_press(index: int, *, ctx: "ActionContext") -> ActionResult:
     """Long press the element with the given index."""
     try:
-        x, y = ctx.ui.get_element_coords(index)
-        await ctx.driver.swipe(x, y, x, y, 1000)
+        abs_x, abs_y = _resolve_element_point(ctx, index)
+        await ctx.driver.swipe(abs_x, abs_y, abs_x, abs_y, 1000)
         return ActionResult(
-            success=True, summary=f"Long pressed element at index {index} at ({x}, {y})"
+            success=True,
+            summary=f"Long pressed element at index {index} at ({abs_x}, {abs_y})",
         )
     except ValueError as e:
         return ActionResult(
@@ -107,8 +114,8 @@ async def type_text(
     try:
         # Tap the element first if a specific index is given
         if index != -1:
-            x, y = ctx.ui.get_element_coords(index)
-            await ctx.driver.tap(x, y)
+            abs_x, abs_y = _resolve_element_point(ctx, index)
+            await ctx.driver.tap(abs_x, abs_y)
 
         success = await ctx.driver.input_text(text, clear)
         if success:
@@ -265,8 +272,8 @@ async def type_secret(
 
         # Tap the element first if a specific index is given
         if index != -1:
-            x, y = ctx.ui.get_element_coords(index)
-            await ctx.driver.tap(x, y)
+            abs_x, abs_y = _resolve_element_point(ctx, index)
+            await ctx.driver.tap(abs_x, abs_y)
 
         ok = await ctx.driver.input_text(secret_value)
         if ok:

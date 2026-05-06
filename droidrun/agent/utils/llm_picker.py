@@ -2,6 +2,7 @@ import logging
 import os
 import ssl
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from llama_index.core.llms.llm import LLM
 
@@ -24,6 +25,38 @@ SUPPORTED_PROVIDERS = [
 ]
 
 
+def _is_local_hostname(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    normalized = hostname.strip().lower()
+    return normalized in {"localhost", "127.0.0.1", "::1"}
+
+
+def _ensure_no_proxy_for_local_url(url: str | None) -> None:
+    """Ensure local model endpoints bypass system HTTP proxies."""
+    if not url:
+        return
+    try:
+        hostname = urlparse(url).hostname
+    except Exception:
+        return
+    if not _is_local_hostname(hostname):
+        return
+
+    no_proxy_value = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    entries = [item.strip() for item in no_proxy_value.split(",") if item.strip()]
+    local_hosts = ["localhost", "127.0.0.1", "::1"]
+    changed = False
+    for host in local_hosts:
+        if host not in entries:
+            entries.append(host)
+            changed = True
+    if changed:
+        merged = ",".join(entries)
+        os.environ["NO_PROXY"] = merged
+        os.environ["no_proxy"] = merged
+
+
 
 # 教程注释：load_llm 会根据 provider 名称选择具体实现类，并把通用 kwargs 转成对应 SDK 的初始化参数。
 def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM:
@@ -42,6 +75,8 @@ def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM
 
     if model is not None:
         kwargs["model"] = model
+
+    _ensure_no_proxy_for_local_url(kwargs.get("base_url") or kwargs.get("api_base"))
 
     # --- OAuth providers ---
     if provider_name == "openai_oauth":
@@ -79,13 +114,20 @@ def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
-        kwargs["async_http_client"] = httpx.AsyncClient(verify=ssl_context)
+        target_url = kwargs.get("api_base") or kwargs.get("base_url")
+        kwargs["async_http_client"] = httpx.AsyncClient(
+            verify=ssl_context,
+            trust_env=not _is_local_hostname(urlparse(target_url).hostname if target_url else None),
+        )
     elif provider_name == "GoogleGenAI":
         from llama_index.llms.google_genai import GoogleGenAI
         llm_class = GoogleGenAI
     elif provider_name == "Ollama":
         from llama_index.llms.ollama import Ollama
         llm_class = Ollama
+        # Manager/executor prompts can be large; default Ollama client timeout is often too short.
+        # Allow profile kwargs to override this default.
+        kwargs.setdefault("request_timeout", 180.0)
     elif provider_name == "Anthropic":
         from llama_index.llms.anthropic import Anthropic
         llm_class = Anthropic

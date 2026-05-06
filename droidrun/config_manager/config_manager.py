@@ -187,7 +187,7 @@ class LoggingConfig:
 
 
 def _default_disabled_tools() -> List[str]:
-    return ["click_at", "click_area", "long_press_at"]
+    return ["click_area", "long_press_at"]
 
 
 @dataclass

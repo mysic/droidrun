@@ -276,9 +276,11 @@ class DroidAgent(Workflow):
                 base_path=self.config.logging.trajectory_path,
             )
             self.trajectory_writer = TrajectoryWriter(queue_size=300)
+            self.shared_state.output_dir = str(self.trajectory.trajectory_folder)
         else:
             self.trajectory = None
             self.trajectory_writer = None
+            self.shared_state.output_dir = ""
         # 业务: 如果启用了轨迹记录（trajectory），创建轨迹对象与异步写入器，用于保存截图和 UI 状态。
         # 语法: `Trajectory(...)` 是类实例化；`TrajectoryWriter(queue_size=300)` 创建负责异步写文件的帮助对象。
 

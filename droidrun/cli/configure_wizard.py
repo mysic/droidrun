@@ -534,7 +534,8 @@ def run_configure_wizard(
     api_key: str | None,
     base_url: str | None,
 ) -> None:
-    config = ConfigLoader.load()
+    config_path = ConfigLoader.get_active_config_path()
+    config = ConfigLoader.load(str(config_path))
     _print_configure_intro(console)
 
     families = family_choices()
@@ -572,7 +573,7 @@ def run_configure_wizard(
             base_url=base_url,
         )
         if provider_configured:
-            ConfigLoader.save(config)
+            ConfigLoader.save_to_path(config, config_path)
             _print_configure_summary(
                 console,
                 provider_label=family_labels[state.family_id],
@@ -621,7 +622,7 @@ def run_configure_wizard(
             _configure_advanced_settings(console, config)
 
         elif action == "finish":
-            ConfigLoader.save(config)
+            ConfigLoader.save_to_path(config, config_path)
             if provider_configured and state.family_id:
                 _print_configure_summary(
                     console,
