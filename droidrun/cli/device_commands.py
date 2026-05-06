@@ -7,6 +7,7 @@ and talk directly to the device driver.
 import asyncio
 import os
 import tempfile
+from dataclasses import dataclass
 from functools import wraps
 from typing import Optional
 
@@ -14,6 +15,7 @@ import click
 from rich.console import Console
 
 from droidrun.config_manager import ConfigLoader
+from droidrun.tools.helpers.coordinate import NORMALIZED_MAX, to_absolute
 from droidrun.tools.driver.factory import create_driver_from_device_config
 from droidrun.tools.filters import ConciseFilter
 from droidrun.tools.formatters import IndexedFormatter
@@ -21,6 +23,63 @@ from droidrun.tools.ui.ios_provider import IOSStateProvider
 from droidrun.tools.ui.provider import AndroidStateProvider
 
 console = Console()
+
+
+@dataclass
+class DeviceCommandContext:
+    """Runtime context resolved before executing a direct device command."""
+
+    use_normalized_coordinates: bool
+    screen_width: Optional[int]
+    screen_height: Optional[int]
+
+    def convert_point(self, x: int, y: int) -> tuple[int, int]:
+        """Convert UI-tree [0-1000] coordinate to absolute pixel if enabled."""
+        if not self.use_normalized_coordinates:
+            return x, y
+
+        if self.screen_width is None or self.screen_height is None:
+            raise click.ClickException(
+                "agent.use_normalized_coordinates is enabled, but screen resolution "
+                "is unavailable. Please ensure UI state is accessible."
+            )
+
+        if not (0 <= x <= NORMALIZED_MAX and 0 <= y <= NORMALIZED_MAX):
+            raise click.ClickException(
+                f"Coordinates ({x}, {y}) are out of normalized range [0, {NORMALIZED_MAX}]."
+            )
+
+        return to_absolute(x, y, self.screen_width, self.screen_height)
+
+
+async def _prepare_device_command_context(
+    driver,
+    use_normalized_coordinates: bool,
+) -> DeviceCommandContext:
+    """Run per-command preflight and read real device resolution."""
+    screen_width: Optional[int] = None
+    screen_height: Optional[int] = None
+
+    try:
+        state = await driver.get_ui_tree()
+        if isinstance(state, dict):
+            screen_bounds = state.get("device_context", {}).get("screen_bounds", {})
+            width = screen_bounds.get("width")
+            height = screen_bounds.get("height")
+            if width is not None and height is not None:
+                screen_width = int(width)
+                screen_height = int(height)
+    except Exception as exc:
+        click.echo(
+            f"Warning: failed to resolve device resolution in preflight: {exc}",
+            err=True,
+        )
+
+    return DeviceCommandContext(
+        use_normalized_coordinates=use_normalized_coordinates,
+        screen_width=screen_width,
+        screen_height=screen_height,
+    )
 
 
 def coro(f):
@@ -96,8 +155,17 @@ async def _create_driver(
     if ios:
         config.device.platform = "ios"
 
+    use_normalized_coordinates = bool(config.agent.use_normalized_coordinates)
+
     try:
-        return await create_driver_from_device_config(config.device, debug=False)
+        driver, is_ios = await create_driver_from_device_config(
+            config.device, debug=False
+        )
+        context = await _prepare_device_command_context(
+            driver,
+            use_normalized_coordinates,
+        )
+        return driver, is_ios, context
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -136,7 +204,7 @@ def device_cli():
 @coro
 async def screenshot(device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Take a screenshot and print the saved file path to stdout."""
-    driver, _ = await _create_driver(
+    driver, _, _ = await _create_driver(
         device,
         config_path,
         tcp,
@@ -164,7 +232,7 @@ async def screenshot(device, config_path, tcp, driver_backend, portal_mode, port
 @coro
 async def ui(device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Print the UI accessibility tree with element bounds for targeting."""
-    driver, is_ios = await _create_driver(
+    driver, is_ios, context = await _create_driver(
         device,
         config_path,
         tcp,
@@ -176,12 +244,16 @@ async def ui(device, config_path, tcp, driver_backend, portal_mode, portal_url, 
     )
     try:
         if is_ios:
-            provider = IOSStateProvider(driver)
+            provider = IOSStateProvider(
+                driver,
+                use_normalized=context.use_normalized_coordinates,
+            )
         else:
             provider = AndroidStateProvider(
                 driver,
                 tree_filter=ConciseFilter(),
                 tree_formatter=IndexedFormatter(),
+                use_normalized=context.use_normalized_coordinates,
             )
         state = await provider.get_state()
         click.echo(state.formatted_text)
@@ -197,8 +269,12 @@ async def ui(device, config_path, tcp, driver_backend, portal_mode, portal_url, 
 @device_options
 @coro
 async def tap(x, y, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
-    """Tap at screen coordinates."""
-    driver, _ = await _create_driver(
+    """Tap at screen coordinates.
+
+    If agent.use_normalized_coordinates=true, coordinates are interpreted as
+    UI-tree normalized [0-1000] and converted before execution.
+    """
+    driver, _, context = await _create_driver(
         device,
         config_path,
         tcp,
@@ -209,8 +285,12 @@ async def tap(x, y, device, config_path, tcp, driver_backend, portal_mode, porta
         ios,
     )
     try:
-        await driver.tap(x, y)
-        click.echo(f"Tapped ({x}, {y})")
+        tap_x, tap_y = context.convert_point(x, y)
+        await driver.tap(tap_x, tap_y)
+        if context.use_normalized_coordinates:
+            click.echo(f"Tapped normalized ({x}, {y}) -> device ({tap_x}, {tap_y})")
+        else:
+            click.echo(f"Tapped ({tap_x}, {tap_y})")
     finally:
         await _teardown_android(driver)
 
@@ -226,8 +306,12 @@ async def tap(x, y, device, config_path, tcp, driver_backend, portal_mode, porta
 @device_options
 @coro
 async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
-    """Swipe from (x1, y1) to (x2, y2)."""
-    driver, _ = await _create_driver(
+    """Swipe from (x1, y1) to (x2, y2).
+
+    If agent.use_normalized_coordinates=true, coordinates are interpreted as
+    UI-tree normalized [0-1000] and converted before execution.
+    """
+    driver, _, context = await _create_driver(
         device,
         config_path,
         tcp,
@@ -238,8 +322,16 @@ async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, driver_b
         ios,
     )
     try:
-        await driver.swipe(x1, y1, x2, y2, duration_ms=duration * 1000)
-        click.echo(f"Swiped ({x1}, {y1}) -> ({x2}, {y2})")
+        abs_x1, abs_y1 = context.convert_point(x1, y1)
+        abs_x2, abs_y2 = context.convert_point(x2, y2)
+        await driver.swipe(abs_x1, abs_y1, abs_x2, abs_y2, duration_ms=duration * 1000)
+        if context.use_normalized_coordinates:
+            click.echo(
+                f"Swiped normalized ({x1}, {y1}) -> ({x2}, {y2}) -> "
+                f"device ({abs_x1}, {abs_y1}) -> ({abs_x2}, {abs_y2})"
+            )
+        else:
+            click.echo(f"Swiped ({abs_x1}, {abs_y1}) -> ({abs_x2}, {abs_y2})")
     finally:
         await _teardown_android(driver)
 
@@ -250,10 +342,14 @@ async def swipe_cmd(x1, y1, x2, y2, duration, device, config_path, tcp, driver_b
 @device_options
 @coro
 async def long_press(x, y, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
-    """Long press at screen coordinates."""
+    """Long press at screen coordinates.
+
+    If agent.use_normalized_coordinates=true, coordinates are interpreted as
+    UI-tree normalized [0-1000] and converted before execution.
+    """
     if ios:
         raise click.ClickException("long-press is not supported on iOS")
-    driver, _ = await _create_driver(
+    driver, _, context = await _create_driver(
         device,
         config_path,
         tcp,
@@ -264,8 +360,14 @@ async def long_press(x, y, device, config_path, tcp, driver_backend, portal_mode
         ios,
     )
     try:
-        await driver.swipe(x, y, x, y, 1000)
-        click.echo(f"Long pressed ({x}, {y})")
+        abs_x, abs_y = context.convert_point(x, y)
+        await driver.swipe(abs_x, abs_y, abs_x, abs_y, 1000)
+        if context.use_normalized_coordinates:
+            click.echo(
+                f"Long pressed normalized ({x}, {y}) -> device ({abs_x}, {abs_y})"
+            )
+        else:
+            click.echo(f"Long pressed ({abs_x}, {abs_y})")
     finally:
         await _teardown_android(driver)
 
@@ -277,7 +379,7 @@ async def long_press(x, y, device, config_path, tcp, driver_backend, portal_mode
 @coro
 async def type_text(text, clear, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Type text into the currently focused field. Use 'tap' first to focus."""
-    driver, _ = await _create_driver(
+    driver, _, _ = await _create_driver(
         device,
         config_path,
         tcp,
@@ -305,7 +407,7 @@ async def type_text(text, clear, device, config_path, tcp, driver_backend, porta
 @coro
 async def press(button, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Press a system button."""
-    driver, _ = await _create_driver(
+    driver, _, _ = await _create_driver(
         device,
         config_path,
         tcp,
@@ -328,7 +430,7 @@ async def press(button, device, config_path, tcp, driver_backend, portal_mode, p
 @coro
 async def apps(system, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """List installed apps."""
-    driver, _ = await _create_driver(
+    driver, _, _ = await _create_driver(
         device,
         config_path,
         tcp,
@@ -357,7 +459,7 @@ async def apps(system, device, config_path, tcp, driver_backend, portal_mode, po
 @coro
 async def start(package, device, config_path, tcp, driver_backend, portal_mode, portal_url, portal_token, ios):
     """Launch an app by package name."""
-    driver, _ = await _create_driver(
+    driver, _, _ = await _create_driver(
         device,
         config_path,
         tcp,
