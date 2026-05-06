@@ -1,4 +1,6 @@
 import logging
+import os
+import ssl
 from typing import TYPE_CHECKING, Any
 
 from llama_index.core.llms.llm import LLM
@@ -10,6 +12,10 @@ if TYPE_CHECKING:
 
 # Configure logging
 logger = logging.getLogger("droidrun")
+
+# Disable SSL verification globally for Aliyun Bailian
+# This must be done before any HTTP requests
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 SUPPORTED_PROVIDERS = [
@@ -62,10 +68,18 @@ def load_llm(provider_name: str, model: str | None = None, **kwargs: Any) -> LLM
         llm_class = OpenAIResponses
     elif provider_name == "OpenAILike":
         from llama_index.llms.openai_like import OpenAILike
+        import httpx
+        import ssl
         llm_class = OpenAILike
         kwargs.setdefault("is_chat_model", True)
         if "base_url" in kwargs and "api_base" not in kwargs:
             kwargs["api_base"] = kwargs.pop("base_url")
+        # Disable SSL verification for Aliyun Bailian
+        # Create a custom async httpx client with SSL verification disabled
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        kwargs["async_http_client"] = httpx.AsyncClient(verify=ssl_context)
     elif provider_name == "GoogleGenAI":
         from llama_index.llms.google_genai import GoogleGenAI
         llm_class = GoogleGenAI

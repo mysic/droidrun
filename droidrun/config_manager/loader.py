@@ -35,28 +35,43 @@ class ConfigLoader:
     def get_user_config_path(cls) -> Path:
         return cls.get_user_config_dir() / cls.CONFIG_FILE
 
-    # 教程注释：load 按“显式参数 -> 环境变量 -> 用户目录 -> 默认初始化”的顺序决定最终使用哪份配置。
+    @classmethod
+    def get_project_config_path(cls) -> Path:
+        """Get project config path (droidrun/config.yaml in project root)."""
+        # Find the project root by looking for the droidrun package directory
+        current_file = Path(__file__).resolve()
+        # Go up from config_manager/loader.py to droidrun/ then to project root
+        project_root = current_file.parent.parent.parent
+        return project_root / "droidrun" / cls.CONFIG_FILE
+
+    # 教程注释：load 按"显式参数 -> 环境变量 -> 项目目录 -> 用户目录 -> 默认初始化"的顺序决定最终使用哪份配置。
     @classmethod
     def load(cls, config_path: Optional[str] = None) -> DroidConfig:
         """
         Load config with resolution order:
         1. Explicit config_path argument
         2. DROIDRUN_CONFIG env var
-        3. User config (~/.config/droidrun/config.yaml)
-        4. Package defaults (creates user config)
+        3. Project config (droidrun/config.yaml in project root)
+        4. User config (~/.config/droidrun/config.yaml)
+        5. Package defaults (creates user config)
         """
         if config_path:
             return cls._load_user_config(Path(config_path))
-
+    
         env_config = os.environ.get("DROIDRUN_CONFIG")
         if env_config and Path(env_config).exists():
             return cls._load_user_config(Path(env_config))
-
+    
+        # Try project config first
+        project_config_path = cls.get_project_config_path()
+        if project_config_path.exists():
+            return cls._load_user_config(project_config_path)
+    
         user_config_path = cls.get_user_config_path()
-
+    
         if user_config_path.exists():
             return cls._load_user_config(user_config_path)
-
+    
         return cls._init_user_config()
 
     @classmethod
