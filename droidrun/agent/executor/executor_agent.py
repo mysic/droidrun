@@ -384,7 +384,10 @@ class ExecutorAgent(Workflow):
             response = await acall_with_retries(
                 self.llm,
                 messages,
-                stream=self.agent_config.streaming,
+                retries=2,
+                timeout=45,
+                delay=0.5,
+                stream=False,
             )
             return self._extract_json_object(str(response))
 
@@ -413,35 +416,6 @@ class ExecutorAgent(Workflow):
                 _build_grounding_prompt(screenshot_only=True)
             )
 
-        bottom_region_markers = [
-            "bottom navigation",
-            "navigation bar",
-            "bottom bar",
-            "tab bar",
-            "底部",
-            "底栏",
-            "底部导航",
-            "导航栏",
-            "底部标签",
-        ]
-        subgoal_lower = (subgoal or "").lower()
-        candidate_x, candidate_y = _candidate_screenshot_point(parsed)
-        if parsed.get("found") and any(
-            marker in subgoal_lower for marker in bottom_region_markers
-        ) and candidate_y is not None and candidate_y < int(screenshot_height * 0.75):
-            logger.info(
-                "🔁 Grounding point is not in the bottom region; retrying with bottom-region constraint"
-            )
-            parsed = await _run_grounding_prompt(
-                _build_grounding_prompt(
-                    screenshot_only=True,
-                    extra_hint=(
-                        "Additional constraint: the target is in the bottom navigation region. "
-                        f"Return a point in the bottom 25% of the screenshot (y >= {int(screenshot_height * 0.75)}).\n\n"
-                    ),
-                )
-            )
-
         if not parsed.get("found"):
             reason = parsed.get("reason", "target not found on screenshot")
             raise ValueError(f"Screenshot grounding failed: {reason}")
@@ -451,19 +425,48 @@ class ExecutorAgent(Workflow):
         grounded_x_norm = parsed.get("x_norm")
         grounded_y_norm = parsed.get("y_norm")
 
+        planner_norm_xy = (
+            isinstance(proposed_x, int)
+            and isinstance(proposed_y, int)
+            and 0 <= proposed_x <= NORMALIZED_MAX
+            and 0 <= proposed_y <= NORMALIZED_MAX
+        )
+
         if isinstance(screenshot_abs_x, int) and isinstance(screenshot_abs_y, int):
-            if not (
-                0 <= screenshot_abs_x <= screenshot_width
-                and 0 <= screenshot_abs_y <= screenshot_height
-            ):
-                raise ValueError(f"Out-of-range screenshot grounded coordinates: {parsed}")
-            grounded_x_norm, grounded_y_norm = to_normalized(
-                screenshot_abs_x,
-                screenshot_abs_y,
-                screenshot_width,
-                screenshot_height,
+            looks_like_planner_normalized_echo = (
+                use_normalized
+                and planner_norm_xy
+                and 0 <= screenshot_abs_x <= NORMALIZED_MAX
+                and 0 <= screenshot_abs_y <= NORMALIZED_MAX
+                and abs(screenshot_abs_x - int(proposed_x)) <= 8
+                and abs(screenshot_abs_y - int(proposed_y)) <= 8
             )
-            mark_x, mark_y = screenshot_abs_x, screenshot_abs_y
+
+            if looks_like_planner_normalized_echo:
+                grounded_x_norm, grounded_y_norm = screenshot_abs_x, screenshot_abs_y
+                mark_x, mark_y = to_absolute(
+                    grounded_x_norm,
+                    grounded_y_norm,
+                    screenshot_width,
+                    screenshot_height,
+                )
+                logger.info(
+                    "🧭 Interpreting grounding x/y as normalized coordinates "
+                    "because they match planner normalized values"
+                )
+            else:
+                if not (
+                    0 <= screenshot_abs_x <= screenshot_width
+                    and 0 <= screenshot_abs_y <= screenshot_height
+                ):
+                    raise ValueError(f"Out-of-range screenshot grounded coordinates: {parsed}")
+                grounded_x_norm, grounded_y_norm = to_normalized(
+                    screenshot_abs_x,
+                    screenshot_abs_y,
+                    screenshot_width,
+                    screenshot_height,
+                )
+                mark_x, mark_y = screenshot_abs_x, screenshot_abs_y
         elif isinstance(grounded_x_norm, int) and isinstance(grounded_y_norm, int):
             if (
                 0 <= grounded_x_norm <= NORMALIZED_MAX
@@ -791,17 +794,26 @@ class ExecutorAgent(Workflow):
                 action_dict["y"] = grounded["y"]
                 click_at_grounded = True
             except Exception as e:
-                logger.warning(f"click_at grounding blocked execution: {e}")
-                event = ExecutorActionResultEvent(
-                    action=action_dict,
-                    success=False,
-                    error=str(e),
-                    summary=f"Blocked ungrounded click_at: {e}",
-                    thought=ev.thought,
-                    full_response=ev.full_response,
+                has_fallback_click_point = isinstance(action_args.get("x"), int) and isinstance(
+                    action_args.get("y"), int
                 )
-                ctx.write_event_to_stream(event)
-                return event
+                if subgoal_has_explicit_coordinates and has_fallback_click_point:
+                    logger.warning(
+                        "click_at grounding failed; falling back to explicit planner coordinates: "
+                        f"{e}"
+                    )
+                else:
+                    logger.warning(f"click_at grounding blocked execution: {e}")
+                    event = ExecutorActionResultEvent(
+                        action=action_dict,
+                        success=False,
+                        error=str(e),
+                        summary=f"Blocked ungrounded click_at: {e}",
+                        thought=ev.thought,
+                        full_response=ev.full_response,
+                    )
+                    ctx.write_event_to_stream(event)
+                    return event
 
         required_targets = self._extract_required_targets(subgoal or "")
         if not required_targets:
